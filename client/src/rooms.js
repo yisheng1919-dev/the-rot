@@ -24,13 +24,19 @@ export const ROOMS = [
 export const CORRIDORS = [
   { id: "C_CONTROL_STORAGE", x: -36, z: -14, w: 8, d: 8 },
   { id: "C_STORAGE_UPPERENGINE", x: -36, z: 6, w: 8, d: 8 },
-  { id: "C_LOBBY_CAFETERIA", x: -20, z: -14, w: 8, d: 8 },
-  { id: "C_SECURITY_CAFETERIA", x: -20, z: 6, w: 8, d: 8 },
-  { id: "C_MAP_CAFETERIA", x: 12, z: -14, w: 8, d: 8 },
-  { id: "C_O2_CAFETERIA", x: 12, z: 6, w: 8, d: 8 },
+  // Top and bottom hallways used to be 3 separate 8-wide doorway corridors
+  // each (one per room), exactly as narrow as the room they led to. On a
+  // mobile touch joystick, players essentially never approach a doorway on
+  // a perfectly straight line — the natural diagonal drift was enough to
+  // clip the corner and get walled off right at the threshold ("stuck by
+  // an invisible wall trying to get into the side rooms"). Widening these
+  // into single hallways spanning the Cafeteria's full width gives room to
+  // correct course before the final (much shorter) approach into the
+  // room's own doorway, without changing which rooms connect to what.
+  { id: "C_TOP_HALLWAY", x: -20, z: -14, w: 40, d: 8 }, // serves Lobby + Map Room
+  { id: "C_BOTTOM_HALLWAY", x: -20, z: 6, w: 40, d: 8 }, // serves Security + Weapons + O2 Room
   { id: "C_POWER_MEDBAY", x: 28, z: -14, w: 8, d: 8 },
   { id: "C_MEDBAY_LOWERENGINE", x: 28, z: 6, w: 8, d: 8 },
-  { id: "C_WEAPONS_CAFETERIA", x: -4, z: 6, w: 8, d: 8 },
   { id: "C_STORAGE_CAFETERIA", x: -28, z: -6, w: 8, d: 12 },
   { id: "C_CAFETERIA_MEDBAY", x: 20, z: -6, w: 8, d: 12 },
 ];

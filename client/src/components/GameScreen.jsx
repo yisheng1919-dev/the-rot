@@ -85,6 +85,15 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
           positionRef.current.x = Math.max(-28, Math.min(28, next.x));
           positionRef.current.z = Math.max(-28, Math.min(28, next.z));
         }
+        // Drive the local player's sprite (position + facing + walk-cycle)
+        // straight from joystick input every frame, same cadence as the
+        // camera below — this is what actually fixed the movement stutter;
+        // see setSelfMotion() for the full explanation.
+        const moving = jx !== 0 || jy !== 0;
+        const facing = Math.abs(jx) > Math.abs(jy) ? (jx > 0 ? "right" : "left") : jy > 0 ? "front" : "back";
+        sceneRef.current?.setSelfMotion(positionRef.current.x, positionRef.current.z, moving, facing);
+      } else {
+        sceneRef.current?.setSelfMotion(positionRef.current.x, positionRef.current.z, false, undefined);
       }
       sceneRef.current?.focusOn(positionRef.current.x, positionRef.current.z);
 

@@ -1,7 +1,7 @@
 import { ROOMS, CORRIDORS } from "../rooms.js";
 import { spriteUrlFor } from "../colors.js";
 
-const WALK_FRAME_MS = 90; // duration of each walk-cycle frame while a player is moving
+const WALK_FRAME_MS = 70; // duration of each walk-cycle frame while a player is moving
 const WALK_FRAMES = 5;
 
 const CORRIDOR_COLOR = "#141a2e";
@@ -132,6 +132,18 @@ export class GameScene2D {
     this.animState = new Map();
     this._lastTickTime = null;
 
+    // The local player's own position/facing, refreshed every animation
+    // frame directly from joystick input in GameScreen (see setSelfMotion).
+    // The camera (focus/renderFocus) was already updated every frame like
+    // this, but the player's own SPRITE used to only move when a
+    // positions:update echo came back from the server (~80ms + network
+    // latency), so the sprite visibly lagged and snapped relative to the
+    // smoothly-moving camera. Rendering self from this instead removes
+    // that mismatch — the network echo still arrives and updates
+    // this.players (used for collision-adjacent bookkeeping and for every
+    // other player), it's just no longer what self draws from.
+    this.selfPos = null;
+
     // Overridable so a full-map spectator view (the Host monitor) can zoom
     // out far enough to fit all 12 rooms at once, instead of the close-in
     // scale a moving player uses.
@@ -197,6 +209,23 @@ export class GameScene2D {
   setRound(round) {
     this.round = round;
   }
+  // Called every animation frame from GameScreen's joystick loop (not just
+  // when the network echoes a position back). x/z are the locally-predicted
+  // position; facing/moving are derived straight from joystick input.
+  setSelfMotion(x, z, moving, facing) {
+    this.selfPos = { x, z };
+    if (!this.selfId) return;
+    const prev = this.animState.get(this.selfId);
+    this.animState.set(this.selfId, {
+      facing: moving ? facing : (prev && prev.facing) || facing,
+      moving,
+      walkFrame: (prev && prev.walkFrame) || 0,
+      walkTimer: (prev && prev.walkTimer) || 0,
+      lastX: x,
+      lastZ: z,
+    });
+  }
+
   updatePlayers(players, viewerIsGhost = false) {
     // Figure out which way each player is facing (and whether they're
     // currently walking) from how far they moved since the last snapshot —
@@ -207,6 +236,18 @@ export class GameScene2D {
     const nextState = new Map();
     const MOVE_EPSILON = 0.02; // world units; ignores network jitter on stationary players
     for (const p of players) {
+      // The local player's facing/moving is owned by setSelfMotion(), driven
+      // every frame from joystick input — leave it alone here so a laggy
+      // network echo can't fight with (and visually stutter against) local
+      // prediction. Everyone else still comes entirely from these snapshots.
+      if (p.playerId === this.selfId) {
+        const prev = this.animState.get(p.playerId);
+        if (prev) {
+          nextState.set(p.playerId, prev);
+          continue;
+        }
+      }
+
       const prev = this.animState.get(p.playerId);
       const dx = prev ? p.x - prev.lastX : 0;
       const dz = prev ? p.z - prev.lastZ : 0;
@@ -454,7 +495,11 @@ export class GameScene2D {
 
   _drawPlayer(p) {
     const isSelf = p.playerId === this.selfId;
-    const { sx, sy } = this.worldToScreen(p.x, p.z);
+    // Draw the local player at their locally-predicted position instead of
+    // the last server echo — see setSelfMotion() for why.
+    const drawX = isSelf && this.selfPos ? this.selfPos.x : p.x;
+    const drawZ = isSelf && this.selfPos ? this.selfPos.z : p.z;
+    const { sx, sy } = this.worldToScreen(drawX, drawZ);
     const ctx = this.ctx;
     const anim = this.animState.get(p.playerId);
     const pose = anim && anim.moving ? `walk_${anim.walkFrame + 1}` : `dir_${(anim && anim.facing) || "front"}`;

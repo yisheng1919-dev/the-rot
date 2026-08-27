@@ -89,13 +89,16 @@ export const ROOMS = {
 export const CORRIDORS = {
   C_CONTROL_STORAGE: { id: "C_CONTROL_STORAGE", x: -36, z: -14, w: 8, d: 8 },
   C_STORAGE_UPPERENGINE: { id: "C_STORAGE_UPPERENGINE", x: -36, z: 6, w: 8, d: 8 },
-  C_LOBBY_CAFETERIA: { id: "C_LOBBY_CAFETERIA", x: -20, z: -14, w: 8, d: 8 },
-  C_SECURITY_CAFETERIA: { id: "C_SECURITY_CAFETERIA", x: -20, z: 6, w: 8, d: 8 },
-  C_MAP_CAFETERIA: { id: "C_MAP_CAFETERIA", x: 12, z: -14, w: 8, d: 8 },
-  C_O2_CAFETERIA: { id: "C_O2_CAFETERIA", x: 12, z: 6, w: 8, d: 8 },
+  // Widened from 3 separate 8-unit doorway corridors each (one per room) to
+  // a single hallway spanning Cafeteria's full width. Mobile touch-joystick
+  // input almost never approaches a doorway perfectly straight, and narrow
+  // corridors gave zero tolerance for that drift — players got walled off
+  // right at the threshold trying to reach the side rooms. Client rooms.js
+  // must mirror this exactly (see the comment there).
+  C_TOP_HALLWAY: { id: "C_TOP_HALLWAY", x: -20, z: -14, w: 40, d: 8 },
+  C_BOTTOM_HALLWAY: { id: "C_BOTTOM_HALLWAY", x: -20, z: 6, w: 40, d: 8 },
   C_POWER_MEDBAY: { id: "C_POWER_MEDBAY", x: 28, z: -14, w: 8, d: 8 },
   C_MEDBAY_LOWERENGINE: { id: "C_MEDBAY_LOWERENGINE", x: 28, z: 6, w: 8, d: 8 },
-  C_WEAPONS_CAFETERIA: { id: "C_WEAPONS_CAFETERIA", x: -4, z: 6, w: 8, d: 8 },
   C_STORAGE_CAFETERIA: { id: "C_STORAGE_CAFETERIA", x: -28, z: -6, w: 8, d: 12 },
   C_CAFETERIA_MEDBAY: { id: "C_CAFETERIA_MEDBAY", x: 20, z: -6, w: 8, d: 12 },
 };

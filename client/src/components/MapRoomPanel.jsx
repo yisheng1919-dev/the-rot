@@ -5,6 +5,7 @@ import { PLAYER_COLORS } from "../colors.js";
 const SWATCH_BY_ID = Object.fromEntries(PLAYER_COLORS.map((c) => [c.id, c.swatch]));
 
 const WORLD_MIN_X = -40, WORLD_MAX_X = 40, WORLD_MIN_Z = -26, WORLD_MAX_Z = 26;
+const WORLD_ASPECT = (WORLD_MAX_X - WORLD_MIN_X) / (WORLD_MAX_Z - WORLD_MIN_Z); // 80/52, landscape
 
 function toPercent(x, z) {
   const px = ((x - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)) * 100;
@@ -21,49 +22,71 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
           CLOSE
         </button>
       </div>
-      <div style={{ position: "relative", flex: 1, background: "#060a16", borderRadius: 14, border: "1px solid var(--border-soft)", overflow: "hidden" }}>
-        {ROOMS.map((r) => {
-          const pos = toPercent(r.x + r.w / 2, r.z + r.d / 2);
-          return (
-            <div
-              key={r.id}
-              style={{
-                position: "absolute",
-                left: pos.left,
-                top: pos.top,
-                transform: "translate(-50%, -50%)",
-                fontSize: 10,
-                color: "var(--text-dim)",
-                letterSpacing: 0.5,
-                textAlign: "center",
-                pointerEvents: "none",
-              }}
-            >
-              {r.label}
-            </div>
-          );
-        })}
-        {players.map((p) => {
-          const pos = toPercent(p.x, p.z);
-          const isSelf = p.playerId === selfId;
-          return (
-            <div
-              key={p.playerId}
-              style={{
-                position: "absolute",
-                left: pos.left,
-                top: pos.top,
-                transform: "translate(-50%, -50%)",
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: isSelf ? "var(--neon-cyan)" : (SWATCH_BY_ID[p.color] || "#dfe6ff"),
-                boxShadow: isSelf ? "0 0 10px var(--neon-cyan)" : "0 0 6px rgba(255,255,255,0.4)",
-              }}
-              title={p.displayName}
-            />
-          );
-        })}
+      {/* This used to be `flex:1`, stretching to fill whatever shape the
+          panel happened to be — fine on a wide desktop window, but on a
+          phone's portrait panel that meant the ship's 80x52 (landscape)
+          layout got squashed into a tall narrow box: X and Z ended up
+          scaled by very different factors, so rooms and players landed in
+          positions that didn't match the ship's real proportions at all
+          ("positions all over the place"). Locking the aspect ratio and
+          letterboxing instead keeps the map's actual shape correct on any
+          screen — narrow bars above/below instead of a distorted map. */}
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0 }}>
+        <div
+          style={{
+            position: "relative",
+            width: "100%",
+            maxHeight: "100%",
+            aspectRatio: `${WORLD_ASPECT}`,
+            background: "#060a16",
+            borderRadius: 14,
+            border: "1px solid var(--border-soft)",
+            overflow: "hidden",
+          }}
+        >
+          {ROOMS.map((r) => {
+            const pos = toPercent(r.x + r.w / 2, r.z + r.d / 2);
+            return (
+              <div
+                key={r.id}
+                style={{
+                  position: "absolute",
+                  left: pos.left,
+                  top: pos.top,
+                  transform: "translate(-50%, -50%)",
+                  fontSize: 10,
+                  color: "var(--text-dim)",
+                  letterSpacing: 0.5,
+                  textAlign: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                {r.label}
+              </div>
+            );
+          })}
+          {players.map((p) => {
+            const pos = toPercent(p.x, p.z);
+            const isSelf = p.playerId === selfId;
+            return (
+              <div
+                key={p.playerId}
+                style={{
+                  position: "absolute",
+                  left: pos.left,
+                  top: pos.top,
+                  transform: "translate(-50%, -50%)",
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  background: isSelf ? "var(--neon-cyan)" : (SWATCH_BY_ID[p.color] || "#dfe6ff"),
+                  boxShadow: isSelf ? "0 0 10px var(--neon-cyan)" : "0 0 6px rgba(255,255,255,0.4)",
+                }}
+                title={p.displayName}
+              />
+            );
+          })}
+        </div>
       </div>
       <div className="small-dim" style={{ marginTop: 8 }}>
         Only living players are shown. Secret roles stay secret.

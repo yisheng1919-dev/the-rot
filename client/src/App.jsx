@@ -224,6 +224,12 @@ export default function App() {
     const onCorruptionPrompt = () => setGame((g) => ({ ...g, corruptionPromptOpen: true }));
     const onVoteTargets = ({ targets, restricted }) =>
       setGame((g) => ({ ...g, voteTargets: targets, hasVoted: false }));
+    // Sent only to a reconnecting player, right after vote:targets, to
+    // correct the hasVoted:false that onVoteTargets just set — otherwise
+    // someone who already voted before disconnecting would reconnect to a
+    // live "CONFIRM VOTE" button (harmless server-side since double votes
+    // are rejected, but confusing: it looks like their vote never counted).
+    const onVoteSelf = ({ hasVoted }) => setGame((g) => ({ ...g, hasVoted }));
     const onVoteProgress = ({ votesCast, votersNeeded }) =>
       setGame((g) => ({ ...g, votesCast, votersNeeded }));
     const onTieCandidates = ({ candidates }) => setGame((g) => ({ ...g, tieCandidates: candidates }));
@@ -271,6 +277,7 @@ export default function App() {
     socket.on("cards:update", onCardsUpdate);
     socket.on("corruption:prompt", onCorruptionPrompt);
     socket.on("vote:targets", onVoteTargets);
+    socket.on("vote:self", onVoteSelf);
     socket.on("vote:progress", onVoteProgress);
     socket.on("tie:candidates", onTieCandidates);
     socket.on("elimination:reveal", onEliminationReveal);
@@ -293,6 +300,7 @@ export default function App() {
       socket.off("cards:update", onCardsUpdate);
       socket.off("corruption:prompt", onCorruptionPrompt);
       socket.off("vote:targets", onVoteTargets);
+      socket.off("vote:self", onVoteSelf);
       socket.off("vote:progress", onVoteProgress);
       socket.off("tie:candidates", onTieCandidates);
       socket.off("elimination:reveal", onEliminationReveal);

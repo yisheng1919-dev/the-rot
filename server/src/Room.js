@@ -147,6 +147,21 @@ export class Room {
         votesCast: [...this.votes.keys()].filter((id) => connectedIds.includes(id)).length,
         votersNeeded: connectedIds.length,
       });
+
+      // This was the actual bug behind "vote buttons vanish after
+      // reconnecting mid-vote": vote:targets is only ever *broadcast* when
+      // voting starts (or a tie-vote narrows the candidates) — a player who
+      // was disconnected at that moment, or whose client simply remounted
+      // on reconnect, never received it and was left with an empty target
+      // list. Re-send it to just this player now, restricted to the tie
+      // candidates if we're in a tie-vote, plus whether they've already
+      // cast a vote so their button state comes back correctly too.
+      const restrictTo = this.phase === PHASES.TIE_VOTE ? this.tieCandidates : null;
+      const targets = (restrictTo ? this.livingPlayers().filter((p) => restrictTo.includes(p.playerId)) : this.livingPlayers()).map(
+        (p) => ({ playerId: p.playerId, displayName: p.displayName })
+      );
+      this.emitToPlayer(player.playerId, "vote:targets", { targets, restricted: !!restrictTo });
+      this.emitToPlayer(player.playerId, "vote:self", { hasVoted: this.votes.has(player.playerId) });
     }
 
     return player;
