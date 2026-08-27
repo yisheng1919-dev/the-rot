@@ -68,6 +68,7 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
           {players.map((p) => {
             const pos = toPercent(p.x, p.z);
             const isSelf = p.playerId === selfId;
+            const playerColor = SWATCH_BY_ID[p.color] || "#dfe6ff";
             return (
               <div
                 key={p.playerId}
@@ -79,8 +80,9 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
                   width: 12,
                   height: 12,
                   borderRadius: "50%",
-                  background: isSelf ? "var(--neon-cyan)" : (SWATCH_BY_ID[p.color] || "#dfe6ff"),
-                  boxShadow: isSelf ? "0 0 10px var(--neon-cyan)" : "0 0 6px rgba(255,255,255,0.4)",
+                  color: playerColor,
+                  background: playerColor,
+                  boxShadow: isSelf ? "0 0 10px currentColor" : "0 0 6px rgba(255,255,255,0.4)",
                 }}
                 title={p.displayName}
               />

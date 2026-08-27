@@ -313,6 +313,15 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
   font-size: 12px;
 }
 
+.host-skip-btn {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(112px, calc(env(safe-area-inset-right) + 98px));
+  z-index: 11;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 /* ---------- Game screen layout ---------- */
 
 .game-canvas-wrap {

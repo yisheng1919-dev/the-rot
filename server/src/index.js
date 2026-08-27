@@ -90,6 +90,12 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("host:skipDiscussion", (_payload, ack) => {
+    const room = roomManager.getRoom(socket.data.roomCode);
+    if (!room || room.hostSocketId !== socket.id) return ack?.({ ok: false, reason: "Not authorized." });
+    ack?.(room.handleHostSkipDiscussion());
+  });
+
   socket.on("host:endRoom", (_payload, ack) => {
     safe(socket, () => {
       const room = roomManager.getRoom(socket.data.roomCode);

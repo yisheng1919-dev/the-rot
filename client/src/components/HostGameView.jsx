@@ -12,7 +12,7 @@ const IDENTITY_LABEL = {
 // Host an unfiltered positions feed — see Room.broadcastPositions — this
 // was just never rendered on the client), plus the roles/cards panel the
 // Host previously had on its own with no gameplay context around it.
-export default function HostGameView({ code, phase, round, powerOn, hostRoles, positions, playersById = {}, onEnd }) {
+export default function HostGameView({ code, phase, round, powerOn, hostRoles, positions, playersById = {}, onSkipDiscussion, onEnd }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const [panelOpen, setPanelOpen] = useState(true);
@@ -68,6 +68,11 @@ export default function HostGameView({ code, phase, round, powerOn, hostRoles, p
       <button className="btn btn-danger host-end-btn" onClick={onEnd}>
         END ROOM
       </button>
+      {phase === "DISCUSSION" && (
+        <button className="btn host-skip-btn" onClick={onSkipDiscussion}>
+          SKIP DISCUSSION
+        </button>
+      )}
     </div>
   );
 }

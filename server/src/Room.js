@@ -532,6 +532,15 @@ export class Room {
     }, this.config.discussionSeconds * 1000);
   }
 
+  handleHostSkipDiscussion() {
+    if (this.phase !== PHASES.DISCUSSION) {
+      return { ok: false, reason: "Discussion is not active." };
+    }
+    if (this.timers.discussionEnd) clearTimeout(this.timers.discussionEnd);
+    this._startVoting();
+    return { ok: true };
+  }
+
   handleCallMeeting(playerId) {
     const player = this.players.get(playerId);
     if (!player || !player.alive) return { ok: false, reason: "Ghosts cannot call meetings." };
@@ -582,10 +591,12 @@ export class Room {
     if (!voter || !voter.alive) return { ok: false, reason: "Ghosts cannot vote." };
     if (this.votes.has(voterId)) return { ok: false, reason: "You already voted." };
 
-    const target = this.players.get(targetId);
-    if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
+    if (targetId !== null) {
+      const target = this.players.get(targetId);
+      if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
+    }
 
-    if (this.phase === PHASES.TIE_VOTE && !this.tieCandidates.includes(targetId)) {
+    if (targetId !== null && this.phase === PHASES.TIE_VOTE && !this.tieCandidates.includes(targetId)) {
       return { ok: false, reason: "You may only vote for tied candidates." };
     }
 
@@ -615,6 +626,7 @@ export class Room {
     const counts = new Map();
     for (const [voterId, targetId] of this.votes.entries()) {
       if (!eligibleVoterIds.includes(voterId)) continue;
+      if (targetId === null) continue;
       counts.set(targetId, (counts.get(targetId) || 0) + 1);
     }
 
@@ -910,6 +922,7 @@ export class Room {
       players: this.livingPlayers().map((p) => ({
         playerId: p.playerId,
         displayName: p.displayName,
+        color: p.color,
         x: p.x,
         z: p.z,
       })),

@@ -22,11 +22,18 @@ export default function VotingPanel({ targets, votesCast, votersNeeded, hasVoted
               {t.displayName}
             </button>
           ))}
+          <button
+            className={`vote-target-btn ${selected === "SKIP" ? "selected" : ""}`}
+            disabled={hasVoted}
+            onClick={() => setSelected("SKIP")}
+          >
+            SKIP VOTE
+          </button>
         </div>
         <button
           className="btn btn-primary btn-block"
-          disabled={!selected || hasVoted}
-          onClick={() => onVote(selected)}
+          disabled={selected === null || hasVoted}
+          onClick={() => onVote(selected === "SKIP" ? null : selected)}
         >
           {hasVoted ? "VOTE LOCKED IN" : "CONFIRM VOTE"}
         </button>

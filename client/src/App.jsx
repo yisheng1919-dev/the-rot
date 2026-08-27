@@ -373,6 +373,11 @@ export default function App() {
     });
   };
   const requestEndRoom = () => setConfirmEndRoom(true);
+  const skipDiscussion = () => {
+    socket.emit("host:skipDiscussion", {}, (res) => {
+      if (!res?.ok) showError(res?.reason || "Could not skip discussion.");
+    });
+  };
   const confirmedEndRoom = () => {
     setConfirmEndRoom(false);
     socket.emit("host:endRoom", {}, () => {
@@ -424,6 +429,7 @@ export default function App() {
         hostRoles={hostRoles}
         positions={hostPositions}
         playersById={playersById}
+        onSkipDiscussion={skipDiscussion}
         onEnd={requestEndRoom}
       />
     );

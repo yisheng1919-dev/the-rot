@@ -15,7 +15,7 @@ import DiscussionBoard from "./DiscussionBoard.jsx";
 import { socket } from "../socket.js";
 
 const MOVE_SPEED = 6.2; // world units per second
-const STEAL_RANGE = 2.5;
+const STEAL_RANGE = 5.0;
 const FROZEN_PHASES = new Set(["DISCUSSION", "VOTING", "TIE_CLARIFY", "TIE_VOTE", "ELIMINATION_REVEAL"]);
 
 export default function GameScreen({ selfId, displayName, game, playersById = {}, onErrorToast }) {
@@ -46,8 +46,8 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   // Close the map panel automatically if a meeting gathers everyone away
   // from the Map Room, or if the player simply walks out.
   useEffect(() => {
-    if (isFrozen || !inMapRoom) setShowMapPanel(false);
-  }, [isFrozen, inMapRoom]);
+    if (isFrozen || !inMapRoom || !game.powerOn) setShowMapPanel(false);
+  }, [game.powerOn, isFrozen, inMapRoom]);
 
   // ---- Set up the 2D scene once ----
   useEffect(() => {
@@ -82,7 +82,7 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
           const dz = jy * MOVE_SPEED * dt;
           const cur = positionRef.current;
           const next = resolveMove(cur.x, cur.z, cur.x + dx, cur.z + dz);
-          positionRef.current.x = Math.max(-28, Math.min(28, next.x));
+          positionRef.current.x = Math.max(-40, Math.min(40, next.x));
           positionRef.current.z = Math.max(-28, Math.min(28, next.z));
         }
         // Drive the local player's sprite (position + facing + walk-cycle)
@@ -177,7 +177,7 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   // (DISCUSSION), there's no point offering the button again since you're
   // already there; it just reads as a confusing, redundant control.
   const showMeeting = !isGhost && game.phase === "FREE_ROAM" && inCafeteria;
-  const showSeeMapButton = !isGhost && inMapRoom && !showMapPanel;
+  const showSeeMapButton = !isGhost && game.powerOn && inMapRoom && !showMapPanel;
   const showStealAction =
     !isGhost && game.isCorrupted && !game.hasStolenThisRound && nearbyStealTargets.length > 0 &&
     (game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn));
@@ -260,7 +260,7 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
         />
       )}
 
-      {showMapPanel && (
+      {showMapPanel && game.powerOn && (
         <MapRoomPanel players={mapPlayers} selfId={selfId} onClose={() => setShowMapPanel(false)} />
       )}
 
