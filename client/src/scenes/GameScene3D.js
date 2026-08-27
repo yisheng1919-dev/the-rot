@@ -25,6 +25,8 @@ export class GameScene3D {
     this.players = [];
     this.viewerIsGhost = false;
     this.visibleRoomId = null;
+    this.blackout = false;
+    this.viewerIsCorrupted = false;
     this.focus = { x: 0, z: 0 };
     this.selfPos = null;
     this.scale = scale;
@@ -38,6 +40,8 @@ export class GameScene3D {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x05070f);
     this.camera = new THREE.OrthographicCamera(-10, 10, 7, -7, 0.1, 200);
+    this.camera.zoom = 1;
+    this.targetZoom = 1;
     this.camera.position.set(0, 28, 18);
     this.camera.lookAt(0, 0, 0);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -141,7 +145,11 @@ export class GameScene3D {
   }
 
   setSelfId(id) { this.selfId = id; }
-  setBlackout(on) { this.blackout = on; }
+  setBlackout(on, viewerIsCorrupted = false) {
+    this.blackout = on;
+    this.viewerIsCorrupted = viewerIsCorrupted;
+    this.targetZoom = on && !viewerIsCorrupted ? 2.2 : 1;
+  }
   setVisibleRoom(roomId) { this.visibleRoomId = roomId; }
   setRound(round) { this.round = round; }
   focusOn(x, z) { this.focus = { x, z }; }
@@ -212,6 +220,8 @@ export class GameScene3D {
     this._raf = requestAnimationFrame(this._tick.bind(this));
     this.camera.position.x += (this.focus.x - this.camera.position.x) * 0.16;
     this.camera.position.z += (this.focus.z + 18 - this.camera.position.z) * 0.16;
+    this.camera.zoom += (this.targetZoom - this.camera.zoom) * 0.12;
+    this.camera.updateProjectionMatrix();
     this.camera.lookAt(this.focus.x, 0, this.focus.z);
     for (const group of this.zoneObjects) group.visible = !this.visibleRoomId || group.userData.roomId === this.visibleRoomId;
     for (const mesh of this.obstacleObjects) mesh.visible = !this.visibleRoomId || mesh.userData.roomId === this.visibleRoomId;

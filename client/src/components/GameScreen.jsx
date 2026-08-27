@@ -58,8 +58,8 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   }, [selfId]);
 
   useEffect(() => {
-    sceneRef.current?.setBlackout(game.phase === "POWER_OUTAGE" && !game.powerOn);
-  }, [game.phase, game.powerOn]);
+    sceneRef.current?.setBlackout(game.phase === "POWER_OUTAGE" && !game.powerOn, game.isCorrupted);
+  }, [game.phase, game.powerOn, game.isCorrupted]);
 
   useEffect(() => {
     sceneRef.current?.setRound(game.round);
@@ -183,7 +183,6 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   const showSeeMapButton = !isGhost && game.powerOn && inMapRoom && !showMapPanel;
   const showStealAction =
     !isGhost && game.isCorrupted && !game.hasStolenThisRound && nearbyStealTargets.length > 0 &&
-    game.corruptedSinceRound !== game.round &&
     (game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn));
 
   return (

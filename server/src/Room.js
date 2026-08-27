@@ -771,6 +771,9 @@ export class Room {
     if (!attacker || !attacker.alive) return { ok: false, reason: "Ghosts cannot steal." };
     if (FROZEN_PHASES.has(this.phase)) return { ok: false, reason: "Can't steal while everyone's gathered at the table." };
     if (!attacker.isCorrupted) return { ok: false, reason: "Only Corrupted players can steal." };
+    if (attacker.corruptedSinceRound === this.round) {
+      return { ok: false, reason: "You can steal starting next round." };
+    }
     if (attacker.hasStolenThisRound) return { ok: false, reason: "You already stole this round." };
 
     const target = this.players.get(targetId);

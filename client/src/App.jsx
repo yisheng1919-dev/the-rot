@@ -147,6 +147,8 @@ export default function App() {
                 alive: res.alive,
                 isOC: res.isOC,
                 isCorrupted: res.isCorrupted,
+                corruptedSinceRound: res.corruptedSinceRound,
+                hasStolenThisRound: res.hasStolenThisRound,
                 cards: res.cards,
                 deadline: res.deadline,
               }));
@@ -213,7 +215,7 @@ export default function App() {
         deadline,
         powerOn,
         ...(phase === "ROUND_START"
-          ? { hasStolenThisRound: g.isCorrupted && g.corruptedSinceRound === round ? true : false, eliminationReveal: null }
+          ? { hasStolenThisRound: g.isCorrupted && Number(g.corruptedSinceRound) === Number(round) ? true : false, eliminationReveal: null }
           : {}),
         ...(phase === "VOTING" || phase === "TIE_VOTE"
           ? { votesCast: 0, votersNeeded: g.livingCount, hasVoted: false }

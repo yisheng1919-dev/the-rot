@@ -143,6 +143,8 @@ io.on("connection", (socket) => {
         alive: player.alive,
         isOC: player.isOC,
         isCorrupted: player.isCorrupted,
+        corruptedSinceRound: player.corruptedSinceRound,
+        hasStolenThisRound: player.hasStolenThisRound,
         cards: player.cards,
         color: player.color,
         x: player.x,
