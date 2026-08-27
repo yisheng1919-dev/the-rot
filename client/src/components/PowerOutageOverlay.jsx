@@ -39,8 +39,20 @@ export default function PowerOutageOverlay({ show, playerX, playerZ }) {
           left: "50%",
           transform: `translate(-50%, -50%) rotate(${angleDeg}deg)`,
         }}
-      />
+      >
+        {/* Classic mouse-pointer silhouette instead of a plain triangle —
+            same rotation logic as before, just a different tip shape. */}
+        <svg viewBox="0 0 24 24" width="56" height="56">
+          {/* Cursor-arrow tip points straight up at rest (0deg), matching
+              the "0deg = ahead" convention the rotation math above uses —
+              a stock mouse-pointer icon's tip normally points up-and-left,
+              which would throw the heading off by ~20deg once rotated. */}
+          <path
+            d="M12 2 L12 18 L15.5 14.8 L18 20.5 L20.3 19.4 L17.6 13.6 L22 13.6 Z"
+            fill="var(--emergency-red)"
+          />
+        </svg>
+      </div>
     </>
   );
 }
-

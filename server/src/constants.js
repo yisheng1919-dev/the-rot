@@ -32,6 +32,10 @@ export const DEFAULT_CONFIG = {
   totalRounds: 3,
   startingCards: 3,
   powerOutageSeconds: 30,
+  // Restoring power takes a group effort — this many distinct players must
+  // be standing in the Power Room and press restore before it actually
+  // comes back on (see Room._restorePower / handleRestorePower).
+  powerRestoreRequiredPlayers: 3,
   discussionSeconds: 180,
   manualMeetingProgressSeconds: 60,
   stealCooldownSeconds: 7,

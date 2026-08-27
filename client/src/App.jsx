@@ -30,6 +30,8 @@ const initialGame = {
   phase: "LOBBY",
   round: 0,
   powerOn: true,
+  powerRestoreCount: 0,
+  powerRestoreNeeded: 0,
   cards: 3,
   alive: true,
   isOC: false,
@@ -216,12 +218,18 @@ export default function App() {
       }));
     };
     const onPowerState = ({ on }) => setGame((g) => ({ ...g, powerOn: on }));
+    const onPowerRestoreProgress = ({ count, needed }) =>
+      setGame((g) => ({ ...g, powerRestoreCount: count, powerRestoreNeeded: needed }));
     const onRoleAssigned = ({ isOC, isCorrupted, cards }) => {
       setGame((g) => ({ ...g, isOC, isCorrupted, cards }));
       setShowRoleReveal(true); // fresh game start (not fired on reconnect) — show it once
     };
     const onCardsUpdate = ({ cards }) => setGame((g) => ({ ...g, cards }));
     const onCorruptionPrompt = () => setGame((g) => ({ ...g, corruptionPromptOpen: true }));
+    // Fired only at the moment a stolen-from player chooses to flip — see
+    // handleCorruptionChoice on the server for why this has to be a
+    // separate event from role:assigned.
+    const onRoleUpdated = ({ isCorrupted }) => setGame((g) => ({ ...g, isCorrupted }));
     const onVoteTargets = ({ targets, restricted }) =>
       setGame((g) => ({ ...g, voteTargets: targets, hasVoted: false }));
     // Sent only to a reconnecting player, right after vote:targets, to
@@ -273,7 +281,9 @@ export default function App() {
     socket.on("players:summary", onPlayersSummary);
     socket.on("phase:change", onPhaseChange);
     socket.on("power:state", onPowerState);
+    socket.on("power:restoreProgress", onPowerRestoreProgress);
     socket.on("role:assigned", onRoleAssigned);
+    socket.on("role:updated", onRoleUpdated);
     socket.on("cards:update", onCardsUpdate);
     socket.on("corruption:prompt", onCorruptionPrompt);
     socket.on("vote:targets", onVoteTargets);
@@ -296,7 +306,9 @@ export default function App() {
       socket.off("players:summary", onPlayersSummary);
       socket.off("phase:change", onPhaseChange);
       socket.off("power:state", onPowerState);
+      socket.off("power:restoreProgress", onPowerRestoreProgress);
       socket.off("role:assigned", onRoleAssigned);
+      socket.off("role:updated", onRoleUpdated);
       socket.off("cards:update", onCardsUpdate);
       socket.off("corruption:prompt", onCorruptionPrompt);
       socket.off("vote:targets", onVoteTargets);

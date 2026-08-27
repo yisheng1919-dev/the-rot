@@ -163,7 +163,12 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
       const dz = p.z - positionRef.current.z;
       return Math.hypot(dx, dz) <= STEAL_RANGE;
     })
-    .map((p) => ({ playerId: p.playerId, displayName: playersById[p.playerId] || "Player" }));
+    .map((p) => {
+      const dx = p.x - positionRef.current.x;
+      const dz = p.z - positionRef.current.z;
+      return { playerId: p.playerId, displayName: playersById[p.playerId] || "Player", dist: Math.hypot(dx, dz) };
+    })
+    .sort((a, b) => a.dist - b.dist);
 
   const showRestorePower =
     !isGhost && game.phase === "POWER_OUTAGE" && !game.powerOn && inPowerRoomZone;
@@ -214,13 +219,31 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
             if (!res?.ok) onErrorToast(res?.reason || "Could not restore power.");
           });
         }}
+        powerRestoreCount={game.powerRestoreCount}
+        powerRestoreNeeded={game.powerRestoreNeeded}
         onCallMeeting={() => {
           socket.emit("player:callMeeting", {}, (res) => {
             if (!res?.ok) onErrorToast(res?.reason || "Could not call meeting.");
           });
         }}
         onOpenMap={() => setShowMapPanel(true)}
-        onOpenStealPicker={() => setShowStealPicker(true)}
+        onOpenStealPicker={() => {
+          // The Original Corrupted preys on whoever's nearest — no picking a
+          // name off a list, just walk up and take it. Regular Corrupted
+          // players still get the picker below (there can be several valid
+          // targets in range, and unlike the OC they're choosing who to
+          // recruit, not just grabbing the closest card).
+          if (game.isOC) {
+            const nearest = nearbyStealTargets[0];
+            if (!nearest) return;
+            socket.emit("player:stealCard", { targetId: nearest.playerId }, (res) => {
+              if (!res?.ok) onErrorToast(res?.reason || "Steal failed.");
+              else game.onStolen?.();
+            });
+            return;
+          }
+          setShowStealPicker(true);
+        }}
       />
 
       {showStealPicker && (

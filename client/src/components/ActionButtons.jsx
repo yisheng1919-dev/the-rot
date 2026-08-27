@@ -9,12 +9,16 @@ export default function ActionButtons({
   onCallMeeting,
   onOpenMap,
   onOpenStealPicker,
+  powerRestoreCount = 0,
+  powerRestoreNeeded = 0,
 }) {
   return (
     <div className="action-stack">
       {showRestorePower && (
         <button className="action-btn power" onClick={onRestorePower}>
-          ⚡ RESTORE POWER
+          {powerRestoreNeeded > 1
+            ? `⚡ RESTORE POWER (${powerRestoreCount}/${powerRestoreNeeded})`
+            : "⚡ RESTORE POWER"}
         </button>
       )}
       {stealTargets && stealTargets.length > 0 && (

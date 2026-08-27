@@ -139,6 +139,13 @@ export class Room {
     this.socketToPlayerId.set(socket.id, player.playerId);
     socket.join(this.roomKey);
 
+    // Same class of bug as the vote-targets one below: a player's client
+    // only ever learns isCorrupted from role:assigned (game start) or
+    // role:updated (the moment they flip) — neither fires again on
+    // reconnect, so a converted player who reconnects would be stuck
+    // thinking they're still Innocent. Resend their current status.
+    this.emitToPlayer(player.playerId, "role:updated", { isCorrupted: player.isCorrupted });
+
     // If they reconnected mid-vote, refresh the "X / Y votes cast" count
     // for everyone — they now count toward the total being waited on again.
     if (this.phase === PHASES.VOTING || this.phase === PHASES.TIE_VOTE) {
@@ -415,7 +422,12 @@ export class Room {
   _startPowerOutage() {
     this.clearAllTimers();
     this.powerOn = false;
+    this.powerRestorers = new Set();
     this.io.to(this.roomKey).emit("power:state", { on: false });
+    this.io.to(this.roomKey).emit("power:restoreProgress", {
+      count: 0,
+      needed: Math.min(this.config.powerRestoreRequiredPlayers, this.livingPlayers().length),
+    });
 
     const deadline = Date.now() + this.config.powerOutageSeconds * 1000;
     this.setPhase(PHASES.POWER_OUTAGE, deadline);
@@ -435,6 +447,26 @@ export class Room {
     if (!player || !player.alive) return { ok: false, reason: "Ghosts cannot restore power." };
     if (!pointInZone(player.x, player.z, POWER_ROOM_ZONE)) {
       return { ok: false, reason: "You must be in the Power Room." };
+    }
+
+    // Needs a group effort: this many distinct players standing in the
+    // Power Room and pressing restore, not just one person. Capped to the
+    // number of living players so a late-game round with a small crew can
+    // never soft-lock waiting on a headcount it can't reach.
+    const needed = Math.min(this.config.powerRestoreRequiredPlayers, this.livingPlayers().length);
+    this.powerRestorers.add(playerId);
+    // Anyone who's left the Power Room since pressing restore doesn't count
+    // toward the total — has to actually be there when it comes back on.
+    for (const id of [...this.powerRestorers]) {
+      const p = this.players.get(id);
+      if (!p || !p.alive || !pointInZone(p.x, p.z, POWER_ROOM_ZONE)) this.powerRestorers.delete(id);
+    }
+
+    const count = this.powerRestorers.size;
+    this.io.to(this.roomKey).emit("power:restoreProgress", { count, needed });
+
+    if (count < needed) {
+      return { ok: true, waitingForMore: true, count, needed };
     }
     this._restorePower(false);
     return { ok: true };
@@ -771,6 +803,16 @@ export class Room {
       player.isCorrupted = true;
       player.corruptedSinceRound = this.round;
       // No card is stolen again — the theft already happened.
+
+      // This was the actual bug behind "a converted player can't steal next
+      // round": the server flipped player.isCorrupted here, but never told
+      // THAT PLAYER'S OWN CLIENT — the client's local isCorrupted flag was
+      // only ever set once, from the initial role:assigned at game start,
+      // and stayed false forever after. The steal button is gated on
+      // game.isCorrupted client-side, so it simply never appeared, even
+      // though the server would have happily accepted a steal request.
+      // Sent to this player only — still secret from everyone else.
+      this.emitToPlayer(playerId, "role:updated", { isCorrupted: true });
     }
     // Silent either way — no broadcast to other players, this must stay
     // completely secret from them. The Host's private monitor view is the
