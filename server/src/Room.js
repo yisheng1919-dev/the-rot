@@ -144,7 +144,11 @@ export class Room {
     // role:updated (the moment they flip) — neither fires again on
     // reconnect, so a converted player who reconnects would be stuck
     // thinking they're still Innocent. Resend their current status.
-    this.emitToPlayer(player.playerId, "role:updated", { isCorrupted: player.isCorrupted });
+    this.emitToPlayer(player.playerId, "role:updated", {
+      isCorrupted: player.isCorrupted,
+      corruptedSinceRound: player.corruptedSinceRound,
+      hasStolenThisRound: player.hasStolenThisRound,
+    });
 
     // If they reconnected mid-vote, refresh the "X / Y votes cast" count
     // for everyone — they now count toward the total being waited on again.
@@ -372,6 +376,8 @@ export class Room {
       this.emitToPlayer(p.playerId, "role:assigned", {
         isOC: p.isOC,
         isCorrupted: p.isCorrupted,
+        corruptedSinceRound: p.corruptedSinceRound,
+        hasStolenThisRound: p.hasStolenThisRound,
         cards: p.cards,
       });
     }
@@ -824,7 +830,11 @@ export class Room {
       // game.isCorrupted client-side, so it simply never appeared, even
       // though the server would have happily accepted a steal request.
       // Sent to this player only — still secret from everyone else.
-      this.emitToPlayer(playerId, "role:updated", { isCorrupted: true });
+      this.emitToPlayer(playerId, "role:updated", {
+        isCorrupted: true,
+        corruptedSinceRound: player.corruptedSinceRound,
+        hasStolenThisRound: player.hasStolenThisRound,
+      });
     }
     // Silent either way — no broadcast to other players, this must stay
     // completely secret from them. The Host's private monitor view is the

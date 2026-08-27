@@ -1,4 +1,4 @@
-import { ROOMS, CORRIDORS } from "../rooms.js";
+import { ROOMS, CORRIDORS, roomAt } from "../rooms.js";
 import { spriteUrlFor } from "../colors.js";
 
 const WALK_FRAME_MS = 70; // duration of each walk-cycle frame while a player is moving
@@ -69,6 +69,7 @@ export class GameScene2D {
     this.players = [];
     this.viewerIsGhost = false;
     this.blackout = false;
+    this.visibleRoomId = null;
     this.focus = { x: 0, z: 0 };
     this.renderFocus = { x: 0, z: 0 };
     this.round = 1;
@@ -152,6 +153,9 @@ export class GameScene2D {
   }
   setBlackout(on) {
     this.blackout = on;
+  }
+  setVisibleRoom(roomId) {
+    this.visibleRoomId = roomId;
   }
   setRound(round) {
     this.round = round;
@@ -327,6 +331,7 @@ export class GameScene2D {
   }
 
   _drawZone(zone, isRoom) {
+    if (isRoom && this.visibleRoomId && zone.id !== this.visibleRoomId) return;
     const { sx, sy } = this.worldToScreen(zone.x, zone.z);
     const w = zone.w * this.scale;
     const h = zone.d * this.scale;
@@ -411,6 +416,8 @@ export class GameScene2D {
     // the last server echo — see setSelfMotion() for why.
     const drawX = isSelf && this.selfPos ? this.selfPos.x : p.x;
     const drawZ = isSelf && this.selfPos ? this.selfPos.z : p.z;
+    const playerRoom = roomAt(drawX, drawZ);
+    if (!isSelf && this.visibleRoomId && playerRoom?.id !== this.visibleRoomId) return;
     const { sx, sy } = this.worldToScreen(drawX, drawZ);
     const ctx = this.ctx;
     const anim = this.animState.get(p.playerId);

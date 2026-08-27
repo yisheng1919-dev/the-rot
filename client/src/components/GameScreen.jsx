@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { GameScene2D } from "../scenes/GameScene2D.js";
+import { GameScene3D } from "../scenes/GameScene3D.js";
 import { roomAt, resolveMove } from "../rooms.js";
 import Joystick from "./Joystick.jsx";
 import HUD from "./HUD.jsx";
@@ -15,7 +15,7 @@ import DiscussionBoard from "./DiscussionBoard.jsx";
 import { socket } from "../socket.js";
 
 const MOVE_SPEED = 6.2; // world units per second
-const STEAL_RANGE = 5.0;
+const STEAL_RANGE = 2.5;
 const FROZEN_PHASES = new Set(["DISCUSSION", "VOTING", "TIE_CLARIFY", "TIE_VOTE", "ELIMINATION_REVEAL"]);
 
 export default function GameScreen({ selfId, displayName, game, playersById = {}, onErrorToast }) {
@@ -49,9 +49,9 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
     if (isFrozen || !inMapRoom || !game.powerOn) setShowMapPanel(false);
   }, [game.powerOn, isFrozen, inMapRoom]);
 
-  // ---- Set up the 2D scene once ----
+  // ---- Set up the 3D scene once ----
   useEffect(() => {
-    const scene = new GameScene2D(containerRef.current);
+    const scene = new GameScene3D(containerRef.current);
     scene.setSelfId(selfId);
     sceneRef.current = scene;
     return () => scene.dispose();
@@ -101,6 +101,7 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
         lastMoveEmit.current = now;
         if (!isGhost && !FROZEN_PHASES.has(phaseRef.current)) socket.emit("player:move", positionRef.current);
         const room = roomAt(positionRef.current.x, positionRef.current.z);
+        sceneRef.current?.setVisibleRoom(room?.id || null);
         setInMapRoom(room?.id === "MAP_ROOM");
         setInCafeteria(room?.id === "CAFETERIA");
         setCurrentRoomLabel(room?.label || null);
@@ -155,10 +156,12 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
       const r = roomAt(positionRef.current.x, positionRef.current.z);
       return r?.id === "POWER_ROOM";
     })();
+  const currentRoom = roomAt(positionRef.current.x, positionRef.current.z);
 
   const nearbyStealTargets = positions
     .filter((p) => {
       if (p.playerId === selfId) return false;
+      if (currentRoom && roomAt(p.x, p.z)?.id !== currentRoom.id) return false;
       const dx = p.x - positionRef.current.x;
       const dz = p.z - positionRef.current.z;
       return Math.hypot(dx, dz) <= STEAL_RANGE;
@@ -180,6 +183,7 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   const showSeeMapButton = !isGhost && game.powerOn && inMapRoom && !showMapPanel;
   const showStealAction =
     !isGhost && game.isCorrupted && !game.hasStolenThisRound && nearbyStealTargets.length > 0 &&
+    game.corruptedSinceRound !== game.round &&
     (game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn));
 
   return (

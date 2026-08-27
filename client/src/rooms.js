@@ -31,6 +31,16 @@ export const CORRIDORS = [
   { id: "C_MEDBAY_LOWERENGINE", x: 22, z: 20, w: 4, d: 2 },
 ];
 
+export const OBSTACLES = ROOMS.flatMap((room, index) => {
+  const insetX = Math.min(2.2, room.w * 0.18);
+  const insetZ = Math.min(2.2, room.d * 0.18);
+  const furniture = [{ roomId: room.id, x: room.x + insetX, z: room.z + insetZ, w: Math.min(3.2, room.w * 0.3), d: Math.min(1.8, room.d * 0.16) }];
+  if (room.w > 12 && room.d > 12) {
+    furniture.push({ roomId: room.id, x: room.x + room.w - insetX - 2.2, z: room.z + room.d - insetZ - 2, w: 2.2, d: 2 });
+  }
+  return furniture.map((obstacle) => ({ ...obstacle, colorIndex: index % 4 }));
+});
+
 export const ALL_ZONES = [...ROOMS, ...CORRIDORS];
 
 export const POWER_ROOM = ROOMS.find((r) => r.id === "POWER_ROOM");
@@ -42,8 +52,12 @@ export function roomAt(x, z) {
 }
 
 export function isWalkable(x, z, margin = 0.3) {
-  return ALL_ZONES.some(
+  const insideMap = ALL_ZONES.some(
     (zone) => x >= zone.x - margin && x <= zone.x + zone.w + margin && z >= zone.z - margin && z <= zone.z + zone.d + margin
+  );
+  if (!insideMap) return false;
+  return !OBSTACLES.some(
+    (obstacle) => x >= obstacle.x - margin && x <= obstacle.x + obstacle.w + margin && z >= obstacle.z - margin && z <= obstacle.z + obstacle.d + margin
   );
 }
 

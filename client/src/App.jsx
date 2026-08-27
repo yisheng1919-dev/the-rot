@@ -36,6 +36,7 @@ const initialGame = {
   alive: true,
   isOC: false,
   isCorrupted: false,
+  corruptedSinceRound: null,
   hasStolenThisRound: false,
   deadline: null,
   corruptionPromptOpen: false,
@@ -211,7 +212,9 @@ export default function App() {
         round,
         deadline,
         powerOn,
-        ...(phase === "ROUND_START" ? { hasStolenThisRound: false, eliminationReveal: null } : {}),
+        ...(phase === "ROUND_START"
+          ? { hasStolenThisRound: g.isCorrupted && g.corruptedSinceRound === round ? true : false, eliminationReveal: null }
+          : {}),
         ...(phase === "VOTING" || phase === "TIE_VOTE"
           ? { votesCast: 0, votersNeeded: g.livingCount, hasVoted: false }
           : {}),
@@ -220,8 +223,8 @@ export default function App() {
     const onPowerState = ({ on }) => setGame((g) => ({ ...g, powerOn: on }));
     const onPowerRestoreProgress = ({ count, needed }) =>
       setGame((g) => ({ ...g, powerRestoreCount: count, powerRestoreNeeded: needed }));
-    const onRoleAssigned = ({ isOC, isCorrupted, cards }) => {
-      setGame((g) => ({ ...g, isOC, isCorrupted, cards }));
+    const onRoleAssigned = ({ isOC, isCorrupted, corruptedSinceRound, hasStolenThisRound, cards }) => {
+      setGame((g) => ({ ...g, isOC, isCorrupted, corruptedSinceRound, hasStolenThisRound, cards }));
       setShowRoleReveal(true); // fresh game start (not fired on reconnect) — show it once
     };
     const onCardsUpdate = ({ cards }) => setGame((g) => ({ ...g, cards }));
@@ -229,7 +232,8 @@ export default function App() {
     // Fired only at the moment a stolen-from player chooses to flip — see
     // handleCorruptionChoice on the server for why this has to be a
     // separate event from role:assigned.
-    const onRoleUpdated = ({ isCorrupted }) => setGame((g) => ({ ...g, isCorrupted }));
+    const onRoleUpdated = ({ isCorrupted, corruptedSinceRound, hasStolenThisRound }) =>
+      setGame((g) => ({ ...g, isCorrupted, corruptedSinceRound, hasStolenThisRound }));
     const onVoteTargets = ({ targets, restricted }) =>
       setGame((g) => ({ ...g, voteTargets: targets, hasVoted: false }));
     // Sent only to a reconnecting player, right after vote:targets, to

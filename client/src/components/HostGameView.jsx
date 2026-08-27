@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { GameScene2D } from "../scenes/GameScene2D.js";
+import { GameScene3D } from "../scenes/GameScene3D.js";
 
 const IDENTITY_LABEL = {
   INNOCENT: "INNOCENT",
@@ -18,7 +18,7 @@ export default function HostGameView({ code, phase, round, powerOn, hostRoles, p
   const [panelOpen, setPanelOpen] = useState(true);
 
   useEffect(() => {
-    const scene = new GameScene2D(containerRef.current, { scale: 9 });
+    const scene = new GameScene3D(containerRef.current, { scale: 9 });
     scene.focusOn(0, 0); // whole-ship view, centered on Cafeteria — the Host doesn't walk around
     sceneRef.current = scene;
     return () => scene.dispose();
