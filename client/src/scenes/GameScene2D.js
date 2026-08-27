@@ -10,6 +10,21 @@ const WALL_DEPTH = 16;
 const CORRIDOR_WALL_DEPTH = 8;
 const WALL_FRAME = 4;
 
+const ROOM_ASSET_FOR_ID = {
+  CONTROL_ROOM: "01_control_room",
+  LOBBY: "02_lobby",
+  MAP_ROOM: "03_map_room",
+  STORAGE: "04_storage",
+  CAFETERIA: "05_cafeteria",
+  POWER_ROOM: "06_power_room",
+  UPPER_ENGINE: "07_upper_engine",
+  SECURITY: "08_security",
+  WEAPONS: "09_weapons",
+  MEDBAY: "10_medbay",
+  O2_ROOM: "11_o2_room",
+  LOWER_ENGINE: "12_lower_engine",
+};
+
 function shade(hex, percent) {
   const num = parseInt(hex.slice(1), 16);
   let r = (num >> 16) & 0xff, g = (num >> 8) & 0xff, b = num & 0xff;
@@ -35,76 +50,10 @@ function hashString(str) {
   return h;
 }
 
-// Which floor tile texture each room uses (files in public/sprites/tiles/).
-const TILE_FOR_ROOM = {
-  CONTROL_ROOM: "tile_purple",
-  LOBBY: "tile_green1",
-  MAP_ROOM: "tile_blue1",
-  POWER_ROOM: "tile_gold",
-  STORAGE: "tile_darkgrey",
-  CAFETERIA: "tile_tan",
-  MEDBAY: "tile_grey1",
-  UPPER_ENGINE: "tile_darkgrey",
-  SECURITY: "tile_green1",
-  WEAPONS: "tile_purple",
-  O2_ROOM: "tile_blue1",
-  LOWER_ENGINE: "tile_darkgrey",
-};
-
-// Furniture/prop sprites placed in each room. x/y are fractions (0-1) of
-// the room's own width/height; scale is relative to a ~2-world-unit base.
-const PROPS_FOR_ROOM = {
-  CONTROL_ROOM: [
-    { img: "monitor_dual", x: 0.28, y: 0.3, scale: 1.1 },
-    { img: "server_rack", x: 0.72, y: 0.62, scale: 1.0 },
-  ],
-  LOBBY: [
-    { img: "sofa_green", x: 0.32, y: 0.6, scale: 1.2 },
-    { img: "plant_tall1", x: 0.78, y: 0.28, scale: 1.1 },
-  ],
-  MAP_ROOM: [{ img: "minimap_screen", x: 0.5, y: 0.42, scale: 1.6 }],
-  POWER_ROOM: [{ img: "reactor_core1", x: 0.5, y: 0.5, scale: 1.7 }],
-  STORAGE: [
-    { img: "crate_brown1", x: 0.25, y: 0.3, scale: 1.0 },
-    { img: "crate_brown2", x: 0.62, y: 0.28, scale: 1.0 },
-    { img: "barrel_blue", x: 0.3, y: 0.7, scale: 0.9 },
-    { img: "barrel_red", x: 0.68, y: 0.72, scale: 0.9 },
-  ],
-  CAFETERIA: [
-    { img: "table_round_orange", x: 0.16, y: 0.35, scale: 1.1 },
-    { img: "table_round_blue", x: 0.4, y: 0.35, scale: 1.1 },
-    { img: "table_round_red", x: 0.64, y: 0.35, scale: 1.1 },
-    { img: "table_round_orange", x: 0.88, y: 0.35, scale: 1.1 },
-    { img: "vending_orange", x: 0.06, y: 0.75, scale: 1.0 },
-    { img: "vending_teal", x: 0.94, y: 0.75, scale: 1.0 },
-  ],
-  MEDBAY: [
-    { img: "medbed_teal", x: 0.28, y: 0.28, scale: 1.1 },
-    { img: "medbed_teal2", x: 0.72, y: 0.28, scale: 1.1 },
-    { img: "medkit", x: 0.5, y: 0.75, scale: 0.8 },
-  ],
-  UPPER_ENGINE: [{ img: "pipe_machine1", x: 0.5, y: 0.5, scale: 1.5 }],
-  SECURITY: [
-    { img: "security_cam", x: 0.25, y: 0.25, scale: 0.9 },
-    { img: "noticeboard", x: 0.68, y: 0.5, scale: 1.1 },
-  ],
-  WEAPONS: [
-    { img: "weaponrack1", x: 0.3, y: 0.5, scale: 1.2 },
-    { img: "weaponrack2", x: 0.7, y: 0.5, scale: 1.2 },
-  ],
-  O2_ROOM: [
-    { img: "canister_blue", x: 0.28, y: 0.5, scale: 0.9 },
-    { img: "canister_green1", x: 0.52, y: 0.5, scale: 0.9 },
-    { img: "canister_green2", x: 0.74, y: 0.5, scale: 0.9 },
-  ],
-  LOWER_ENGINE: [{ img: "reactor_core1", x: 0.5, y: 0.5, scale: 1.4 }],
-};
-
 /**
- * Sprite-based Canvas2D top-down renderer, using real illustrated assets
- * (rooms/furniture atlas + 12-color detective character sheet) instead of
- * procedural shapes. Falls back gracefully — nothing throws — if an image
- * hasn't finished loading yet; it just isn't drawn that frame.
+ * Sprite-based Canvas2D top-down renderer using the illustrated room assets
+ * and 12-color detective character sheets. Falls back gracefully while an
+ * image is loading.
  */
 export class GameScene2D {
   constructor(container, { scale = 24 } = {}) {
@@ -172,11 +121,8 @@ export class GameScene2D {
   }
 
   _preloadImages() {
-    for (const tile of Object.values(TILE_FOR_ROOM)) {
-      this._getImage(`tile:${tile}`, `/sprites/tiles/${tile}.png`);
-    }
-    for (const props of Object.values(PROPS_FOR_ROOM)) {
-      for (const p of props) this._getImage(`prop:${p.img}`, `/sprites/props/${p.img}.png`);
+    for (const [roomId, asset] of Object.entries(ROOM_ASSET_FOR_ID)) {
+      this._getImage(`room:${roomId}`, `/sprites/room/${asset}.png`);
     }
   }
 
@@ -186,11 +132,12 @@ export class GameScene2D {
   // static <color>.png if a pose file is somehow missing for a color.
   _charPoseImage(color, pose) {
     const safeColor = color || "beige";
-    const key = `char:${safeColor}:${pose}`;
+    const sourcePose = pose === "dir_left" ? "dir_right" : pose;
+    const key = `char:${safeColor}:${sourcePose}`;
     let img = this.images.get(key);
     if (!img) {
       img = new Image();
-      img.src = `/sprites/characters/${safeColor}/${pose}.png`;
+      img.src = `/sprites/characters/${safeColor}/${sourcePose}.png`;
       img.onerror = () => {
         img.onerror = null;
         img.src = spriteUrlFor(safeColor);
@@ -328,48 +275,6 @@ export class GameScene2D {
     else this._drawRoundedRect(x, y, w, h, radiusOrChamfer);
   }
 
-  _drawFloorTexture(zone, sx, sy, w, h, radius) {
-    const tileName = TILE_FOR_ROOM[zone.id];
-    if (!tileName) return;
-    const img = this._getImage(`tile:${tileName}`, `/sprites/tiles/${tileName}.png`);
-    if (!img.complete || img.naturalWidth === 0) return;
-    const ctx = this.ctx;
-    ctx.save();
-    this._drawShape(sx, sy, w, h, true, radius);
-    ctx.clip();
-    ctx.globalAlpha = 0.55;
-    const tileSize = 34; // screen px per tile, independent of room scale
-    for (let ty = sy; ty < sy + h; ty += tileSize) {
-      for (let tx = sx; tx < sx + w; tx += tileSize) {
-        ctx.drawImage(img, tx, ty, tileSize, tileSize);
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-
-  _drawRoomPropsSprites(zone, sx, sy, w, h) {
-    const props = PROPS_FOR_ROOM[zone.id];
-    if (!props) return;
-    const ctx = this.ctx;
-    for (const p of props) {
-      const img = this._getImage(`prop:${p.img}`, `/sprites/props/${p.img}.png`);
-      if (!img.complete || img.naturalWidth === 0) continue;
-      const baseSize = 2.1 * this.scale * p.scale; // world-unit-ish sizing
-      const aspect = img.naturalWidth / img.naturalHeight;
-      const drawW = baseSize;
-      const drawH = baseSize / aspect;
-      const px = sx + w * p.x - drawW / 2;
-      const py = sy + h * p.y - drawH * 0.75; // anchor near the "base" of the object
-      ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.5)";
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 3;
-      ctx.drawImage(img, px, py, drawW, drawH);
-      ctx.restore();
-    }
-  }
-
   _getCracksForRoom(zone) {
     const cached = this.crackCache.get(zone.id);
     if (cached && cached.round === this.round) return cached.cracks;
@@ -441,20 +346,27 @@ export class GameScene2D {
     this._drawShape(sx, sy + depth, w, h, isRoom, radius);
     ctx.fill();
 
-    const grad = ctx.createLinearGradient(sx, sy, sx, sy + h);
-    grad.addColorStop(0, shade(baseColor, 0.2));
-    grad.addColorStop(1, shade(baseColor, -0.15));
-    ctx.fillStyle = grad;
+    const roomImage = isRoom && this.images.get(`room:${zone.id}`);
     this._drawShape(sx, sy, w, h, isRoom, radius);
-    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    if (roomImage && roomImage.complete && roomImage.naturalWidth > 0) {
+      ctx.drawImage(roomImage, sx, sy, w, h);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+      ctx.fillRect(sx, sy, w, h);
+    } else {
+      const grad = ctx.createLinearGradient(sx, sy, sx, sy + h);
+      grad.addColorStop(0, shade(baseColor, 0.2));
+      grad.addColorStop(1, shade(baseColor, -0.15));
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx, sy, w, h);
+    }
+    ctx.restore();
 
     if (isRoom) {
-      this._drawFloorTexture(zone, sx, sy, w, h, radius);
-
       ctx.save();
       this._drawShape(sx, sy, w, h, isRoom, radius);
       ctx.clip();
-      this._drawRoomPropsSprites(zone, sx, sy, w, h);
       this._drawCracks(sx, sy, this._getCracksForRoom(zone));
       ctx.restore();
     }
@@ -504,6 +416,7 @@ export class GameScene2D {
     const anim = this.animState.get(p.playerId);
     const pose = anim && anim.moving ? `walk_${anim.walkFrame + 1}` : `dir_${(anim && anim.facing) || "front"}`;
     const img = this._charPoseImage(p.color, pose);
+    const mirrorHorizontal = pose === "dir_left";
 
     ctx.globalAlpha = p.connected === false ? 0.35 : this.viewerIsGhost && !isSelf ? 0.55 : 1;
 
@@ -519,7 +432,15 @@ export class GameScene2D {
       if (this.viewerIsGhost && !isSelf) {
         ctx.filter = "hue-rotate(220deg) saturate(0.6)";
       }
-      ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10, drawW, drawH);
+      if (mirrorHorizontal) {
+        ctx.save();
+        ctx.translate(sx, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -drawW / 2, sy - drawH + 10, drawW, drawH);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10, drawW, drawH);
+      }
       ctx.filter = "none";
     } else {
       // Fallback while the sprite loads: a simple colored dot so players
