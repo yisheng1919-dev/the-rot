@@ -82,8 +82,8 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
           const dz = jy * MOVE_SPEED * dt;
           const cur = positionRef.current;
           const next = resolveMove(cur.x, cur.z, cur.x + dx, cur.z + dz);
-          positionRef.current.x = Math.max(-40, Math.min(40, next.x));
-          positionRef.current.z = Math.max(-28, Math.min(28, next.z));
+          positionRef.current.x = Math.max(-40, Math.min(36, next.x));
+          positionRef.current.z = Math.max(-28, Math.min(34, next.z));
         }
         // Drive the local player's sprite (position + facing + walk-cycle)
         // straight from joystick input every frame, same cadence as the

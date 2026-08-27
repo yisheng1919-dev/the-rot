@@ -58,24 +58,21 @@ export const DEFAULT_CONFIG = {
 // reference) — the client's copy is what actually gets rendered.
 //
 // This is the 12-room layout matching the illustrated map reference:
-// CAFETERIA is the central hub (where meetings gather everyone — it plays
-// the role the spec calls "Main Hall"), with 11 rooms arranged around it in
-// a 3-row grid. Security, Weapons, and O2 Room are plain walkable rooms
-// with no special mechanic of their own — they exist for map texture/scale
-// to match the reference, same as Corridors are in the original spec.
+// three rooms across the top, Cafeteria in the middle, Medbay on the right,
+// and five rooms across the bottom.
 export const ROOMS = {
-  CONTROL_ROOM: { id: "CONTROL_ROOM", label: "Control Room", x: -36, z: -22, w: 8, d: 8, color: 0x2a1a5c },
-  LOBBY: { id: "LOBBY", label: "Lobby", x: -20, z: -22, w: 8, d: 8, color: 0x1e5c3a },
-  MAP_ROOM: { id: "MAP_ROOM", label: "Map Room", x: 12, z: -22, w: 8, d: 8, color: 0x1a4d52 },
-  POWER_ROOM: { id: "POWER_ROOM", label: "Power Room", x: 28, z: -22, w: 8, d: 8, color: 0x5c3d1a },
-  STORAGE: { id: "STORAGE", label: "Storage", x: -36, z: -6, w: 8, d: 12, color: 0x4a3020 },
-  CAFETERIA: { id: "CAFETERIA", label: "Cafeteria", x: -20, z: -6, w: 40, d: 12, color: 0x34405c },
-  MEDBAY: { id: "MEDBAY", label: "Medbay", x: 28, z: -6, w: 8, d: 12, color: 0x5c1a28 },
-  UPPER_ENGINE: { id: "UPPER_ENGINE", label: "Upper Engine", x: -36, z: 14, w: 8, d: 8, color: 0x5c2a1a },
-  SECURITY: { id: "SECURITY", label: "Security", x: -20, z: 14, w: 8, d: 8, color: 0x1a4a2a },
-  WEAPONS: { id: "WEAPONS", label: "Weapons", x: -4, z: 14, w: 8, d: 8, color: 0x3a2a4a },
-  O2_ROOM: { id: "O2_ROOM", label: "O2 Room", x: 12, z: 14, w: 8, d: 8, color: 0x1a5c52 },
-  LOWER_ENGINE: { id: "LOWER_ENGINE", label: "Lower Engine", x: 28, z: 14, w: 8, d: 8, color: 0x5c1a1a },
+  CONTROL_ROOM: { id: "CONTROL_ROOM", label: "Control Room", x: -36, z: -24, w: 14, d: 12, color: 0x2a1a5c },
+  LOBBY: { id: "LOBBY", label: "Lobby", x: -20, z: -24, w: 16, d: 12, color: 0x1e5c3a },
+  MAP_ROOM: { id: "MAP_ROOM", label: "Map Room", x: 0, z: -24, w: 16, d: 12, color: 0x1a4d52 },
+  STORAGE: { id: "STORAGE", label: "Storage", x: -36, z: -8, w: 14, d: 14, color: 0x4a3020 },
+  CAFETERIA: { id: "CAFETERIA", label: "Cafeteria", x: -20, z: -8, w: 32, d: 20, color: 0x34405c },
+  POWER_ROOM: { id: "POWER_ROOM", label: "Power Room", x: 16, z: -8, w: 16, d: 14, color: 0x5c3d1a },
+  MEDBAY: { id: "MEDBAY", label: "Medbay", x: 16, z: 8, w: 16, d: 12, color: 0x5c1a28 },
+  UPPER_ENGINE: { id: "UPPER_ENGINE", label: "Upper Engine", x: -36, z: 16, w: 14, d: 14, color: 0x5c2a1a },
+  SECURITY: { id: "SECURITY", label: "Security", x: -20, z: 16, w: 10, d: 14, color: 0x1a4a2a },
+  WEAPONS: { id: "WEAPONS", label: "Weapons", x: -8, z: 16, w: 10, d: 14, color: 0x3a2a4a },
+  O2_ROOM: { id: "O2_ROOM", label: "O2 Room", x: 4, z: 16, w: 8, d: 14, color: 0x1a5c52 },
+  LOWER_ENGINE: { id: "LOWER_ENGINE", label: "Lower Engine", x: 16, z: 22, w: 16, d: 10, color: 0x5c1a1a },
 };
 
 // Corridors are the only thing connecting rooms to each other. Together with
@@ -86,25 +83,16 @@ export const ROOMS = {
 // Keep this in sync with client/src/rooms.js CORRIDORS — client and server
 // must agree on the exact same walkable shape or movement will rubber-band.
 //
-// Every non-hub room connects DIRECTLY to Cafeteria except the four corner
-// rooms (Control Room, Power Room, Upper Engine, Lower Engine), which are
-// one hop away via their adjacent neighbor (Storage/Medbay) — the same
-// pattern real hallways in the reference map imply.
+// The top and bottom halls branch from Cafeteria; Storage and Medbay provide
+// the side routes to the engine rooms, matching the illustrated floor plan.
 export const CORRIDORS = {
-  C_CONTROL_STORAGE: { id: "C_CONTROL_STORAGE", x: -36, z: -14, w: 8, d: 8 },
-  C_STORAGE_UPPERENGINE: { id: "C_STORAGE_UPPERENGINE", x: -36, z: 6, w: 8, d: 8 },
-  // Widened from 3 separate 8-unit doorway corridors each (one per room) to
-  // a single hallway spanning Cafeteria's full width. Mobile touch-joystick
-  // input almost never approaches a doorway perfectly straight, and narrow
-  // corridors gave zero tolerance for that drift — players got walled off
-  // right at the threshold trying to reach the side rooms. Client rooms.js
-  // must mirror this exactly (see the comment there).
-  C_TOP_HALLWAY: { id: "C_TOP_HALLWAY", x: -20, z: -14, w: 40, d: 8 },
-  C_BOTTOM_HALLWAY: { id: "C_BOTTOM_HALLWAY", x: -20, z: 6, w: 40, d: 8 },
-  C_POWER_MEDBAY: { id: "C_POWER_MEDBAY", x: 28, z: -14, w: 8, d: 8 },
-  C_MEDBAY_LOWERENGINE: { id: "C_MEDBAY_LOWERENGINE", x: 28, z: 6, w: 8, d: 8 },
-  C_STORAGE_CAFETERIA: { id: "C_STORAGE_CAFETERIA", x: -28, z: -6, w: 8, d: 12 },
-  C_CAFETERIA_MEDBAY: { id: "C_CAFETERIA_MEDBAY", x: 20, z: -6, w: 8, d: 12 },
+  C_TOP_HALLWAY: { id: "C_TOP_HALLWAY", x: -20, z: -12, w: 36, d: 4 },
+  C_BOTTOM_HALLWAY: { id: "C_BOTTOM_HALLWAY", x: -20, z: 12, w: 36, d: 4 },
+  C_CONTROL_STORAGE: { id: "C_CONTROL_STORAGE", x: -30, z: -12, w: 4, d: 4 },
+  C_STORAGE_UPPERENGINE: { id: "C_STORAGE_UPPERENGINE", x: -30, z: 6, w: 4, d: 10 },
+  C_STORAGE_CAFETERIA: { id: "C_STORAGE_CAFETERIA", x: -22, z: -4, w: 2, d: 6 },
+  C_POWER_MEDBAY: { id: "C_POWER_MEDBAY", x: 22, z: 6, w: 4, d: 2 },
+  C_MEDBAY_LOWERENGINE: { id: "C_MEDBAY_LOWERENGINE", x: 22, z: 20, w: 4, d: 2 },
 };
 
 export const WALKABLE_ZONES = [...Object.values(ROOMS), ...Object.values(CORRIDORS)];

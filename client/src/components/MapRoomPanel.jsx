@@ -4,8 +4,8 @@ import { PLAYER_COLORS } from "../colors.js";
 
 const SWATCH_BY_ID = Object.fromEntries(PLAYER_COLORS.map((c) => [c.id, c.swatch]));
 
-const WORLD_MIN_X = -40, WORLD_MAX_X = 40, WORLD_MIN_Z = -26, WORLD_MAX_Z = 26;
-const WORLD_ASPECT = (WORLD_MAX_X - WORLD_MIN_X) / (WORLD_MAX_Z - WORLD_MIN_Z); // 80/52, landscape
+const WORLD_MIN_X = -40, WORLD_MAX_X = 36, WORLD_MIN_Z = -28, WORLD_MAX_Z = 34;
+const WORLD_ASPECT = (WORLD_MAX_X - WORLD_MIN_X) / (WORLD_MAX_Z - WORLD_MIN_Z); // 76/62, landscape
 
 function toPercent(x, z) {
   const px = ((x - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)) * 100;
@@ -24,7 +24,7 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
       </div>
       {/* This used to be `flex:1`, stretching to fill whatever shape the
           panel happened to be — fine on a wide desktop window, but on a
-          phone's portrait panel that meant the ship's 80x52 (landscape)
+          phone's portrait panel that meant the ship's 76x62 (landscape)
           layout got squashed into a tall narrow box: X and Z ended up
           scaled by very different factors, so rooms and players landed in
           positions that didn't match the ship's real proportions at all

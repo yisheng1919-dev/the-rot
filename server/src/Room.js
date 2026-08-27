@@ -896,8 +896,8 @@ export class Room {
     // Authoritative wall collision: reject any position that isn't inside a
     // room or corridor. A small margin keeps movement feeling smooth right
     // up against a wall rather than stopping a full player-radius short of it.
-    const nx = Math.max(-40, Math.min(40, x));
-    const nz = Math.max(-26, Math.min(26, z));
+    const nx = Math.max(-40, Math.min(36, x));
+    const nz = Math.max(-28, Math.min(34, z));
     if (!isWalkable(nx, nz, 0.3)) {
       return; // Move rejected — player stays at their last valid position.
     }
