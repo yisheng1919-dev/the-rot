@@ -4,8 +4,10 @@ import { PLAYER_COLORS } from "../colors.js";
 
 const SWATCH_BY_ID = Object.fromEntries(PLAYER_COLORS.map((c) => [c.id, c.swatch]));
 
-const WORLD_MIN_X = -40, WORLD_MAX_X = 36, WORLD_MIN_Z = -28, WORLD_MAX_Z = 34;
-const WORLD_ASPECT = (WORLD_MAX_X - WORLD_MIN_X) / (WORLD_MAX_Z - WORLD_MIN_Z); // 76/62, landscape
+// Must match the real ship extents in rooms.js/constants.js (kept in sync
+// there after the 1.5x world-scale pass — x:[-60,60], z:[-39,39]).
+const WORLD_MIN_X = -60, WORLD_MAX_X = 60, WORLD_MIN_Z = -39, WORLD_MAX_Z = 39;
+const WORLD_ASPECT = (WORLD_MAX_X - WORLD_MIN_X) / (WORLD_MAX_Z - WORLD_MIN_Z); // 120/78, landscape
 
 function toPercent(x, z) {
   const px = ((x - WORLD_MIN_X) / (WORLD_MAX_X - WORLD_MIN_X)) * 100;
@@ -24,7 +26,7 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
       </div>
       {/* This used to be `flex:1`, stretching to fill whatever shape the
           panel happened to be — fine on a wide desktop window, but on a
-          phone's portrait panel that meant the ship's 76x62 (landscape)
+          phone's portrait panel that meant the ship's 80x52 (landscape)
           layout got squashed into a tall narrow box: X and Z ended up
           scaled by very different factors, so rooms and players landed in
           positions that didn't match the ship's real proportions at all
@@ -68,7 +70,6 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
           {players.map((p) => {
             const pos = toPercent(p.x, p.z);
             const isSelf = p.playerId === selfId;
-            const playerColor = SWATCH_BY_ID[p.color] || "#dfe6ff";
             return (
               <div
                 key={p.playerId}
@@ -80,9 +81,8 @@ export default function MapRoomPanel({ players, selfId, onClose }) {
                   width: 12,
                   height: 12,
                   borderRadius: "50%",
-                  color: playerColor,
-                  background: playerColor,
-                  boxShadow: isSelf ? "0 0 10px currentColor" : "0 0 6px rgba(255,255,255,0.4)",
+                  background: isSelf ? "var(--neon-cyan)" : (SWATCH_BY_ID[p.color] || "#dfe6ff"),
+                  boxShadow: isSelf ? "0 0 10px var(--neon-cyan)" : "0 0 6px rgba(255,255,255,0.4)",
                 }}
                 title={p.displayName}
               />

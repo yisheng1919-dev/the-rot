@@ -1,4 +1,4 @@
-import { ROOMS, CORRIDORS, roomAt } from "../rooms.js";
+import { ROOMS, CORRIDORS, PROPS_FOR_ROOM, DOORWAYS } from "../rooms.js";
 import { spriteUrlFor } from "../colors.js";
 
 const WALK_FRAME_MS = 70; // duration of each walk-cycle frame while a player is moving
@@ -9,21 +9,6 @@ const CORRIDOR_BORDER = "#232c4d";
 const WALL_DEPTH = 16;
 const CORRIDOR_WALL_DEPTH = 8;
 const WALL_FRAME = 4;
-
-const ROOM_ASSET_FOR_ID = {
-  CONTROL_ROOM: "01_control_room",
-  LOBBY: "02_lobby",
-  MAP_ROOM: "03_map_room",
-  STORAGE: "04_storage",
-  CAFETERIA: "05_cafeteria",
-  POWER_ROOM: "06_power_room",
-  UPPER_ENGINE: "07_upper_engine",
-  SECURITY: "08_security",
-  WEAPONS: "09_weapons",
-  MEDBAY: "10_medbay",
-  O2_ROOM: "11_o2_room",
-  LOWER_ENGINE: "12_lower_engine",
-};
 
 function shade(hex, percent) {
   const num = parseInt(hex.slice(1), 16);
@@ -50,13 +35,34 @@ function hashString(str) {
   return h;
 }
 
+// Which floor tile texture each room uses (files in public/sprites/tiles/).
+const TILE_FOR_ROOM = {
+  CONTROL_ROOM: "tile_purple",
+  LOBBY: "tile_green1",
+  MAP_ROOM: "tile_blue1",
+  POWER_ROOM: "tile_gold",
+  STORAGE: "tile_darkgrey",
+  CAFETERIA: "tile_tan",
+  MEDBAY: "tile_grey1",
+  UPPER_ENGINE: "tile_darkgrey",
+  SECURITY: "tile_green1",
+  WEAPONS: "tile_purple",
+  O2_ROOM: "tile_blue1",
+  LOWER_ENGINE: "tile_darkgrey",
+};
+
+// PROPS_FOR_ROOM now lives in rooms.js — it also drives real furniture
+// collision (PROP_COLLIDERS) there, so rendering and collision can never
+// drift out of sync with each other.
+
 /**
- * Sprite-based Canvas2D top-down renderer using the illustrated room assets
- * and 12-color detective character sheets. Falls back gracefully while an
- * image is loading.
+ * Sprite-based Canvas2D top-down renderer, using real illustrated assets
+ * (rooms/furniture atlas + 12-color detective character sheet) instead of
+ * procedural shapes. Falls back gracefully — nothing throws — if an image
+ * hasn't finished loading yet; it just isn't drawn that frame.
  */
 export class GameScene2D {
-  constructor(container, { scale = 24 } = {}) {
+  constructor(container, { scale = 32 } = {}) {
     this.container = container;
     this.canvas = document.createElement("canvas");
     this.canvas.style.width = "100%";
@@ -69,7 +75,6 @@ export class GameScene2D {
     this.players = [];
     this.viewerIsGhost = false;
     this.blackout = false;
-    this.visibleRoomId = null;
     this.focus = { x: 0, z: 0 };
     this.renderFocus = { x: 0, z: 0 };
     this.round = 1;
@@ -98,6 +103,7 @@ export class GameScene2D {
     // out far enough to fit all 12 rooms at once, instead of the close-in
     // scale a moving player uses.
     this.scale = scale;
+    this.baseScale = scale;
     this.images = new Map(); // key -> HTMLImageElement (may still be loading)
 
     this._preloadImages();
@@ -122,8 +128,11 @@ export class GameScene2D {
   }
 
   _preloadImages() {
-    for (const [roomId, asset] of Object.entries(ROOM_ASSET_FOR_ID)) {
-      this._getImage(`room:${roomId}`, `/sprites/room/${asset}.png`);
+    for (const tile of Object.values(TILE_FOR_ROOM)) {
+      this._getImage(`tile:${tile}`, `/sprites/tiles/${tile}.png`);
+    }
+    for (const props of Object.values(PROPS_FOR_ROOM)) {
+      for (const p of props) this._getImage(`prop:${p.img}`, `/sprites/props/${p.img}.png`);
     }
   }
 
@@ -133,12 +142,11 @@ export class GameScene2D {
   // static <color>.png if a pose file is somehow missing for a color.
   _charPoseImage(color, pose) {
     const safeColor = color || "beige";
-    const sourcePose = pose === "dir_left" ? "dir_right" : pose;
-    const key = `char:${safeColor}:${sourcePose}`;
+    const key = `char:${safeColor}:${pose}`;
     let img = this.images.get(key);
     if (!img) {
       img = new Image();
-      img.src = `/sprites/characters/${safeColor}/${sourcePose}.png`;
+      img.src = `/sprites/characters/${safeColor}/${pose}.png`;
       img.onerror = () => {
         img.onerror = null;
         img.src = spriteUrlFor(safeColor);
@@ -154,11 +162,18 @@ export class GameScene2D {
   setBlackout(on) {
     this.blackout = on;
   }
-  setVisibleRoom(roomId) {
-    this.visibleRoomId = roomId;
-  }
   setRound(round) {
     this.round = round;
+  }
+  // Zoom relative to whatever scale this scene was constructed with (1.0 =
+  // default). Clamped so the player can't zoom out so far that furniture
+  // colliders become impossible to see/avoid, or in so far that a single
+  // room fills more than the whole screen.
+  setZoom(factor) {
+    this.scale = this.baseScale * Math.max(0.6, Math.min(1.8, factor));
+  }
+  getZoom() {
+    return this.scale / this.baseScale;
   }
   // Called every animation frame from GameScreen's joystick loop (not just
   // when the network echoes a position back). x/z are the locally-predicted
@@ -279,6 +294,48 @@ export class GameScene2D {
     else this._drawRoundedRect(x, y, w, h, radiusOrChamfer);
   }
 
+  _drawFloorTexture(zone, sx, sy, w, h, radius) {
+    const tileName = TILE_FOR_ROOM[zone.id];
+    if (!tileName) return;
+    const img = this._getImage(`tile:${tileName}`, `/sprites/tiles/${tileName}.png`);
+    if (!img.complete || img.naturalWidth === 0) return;
+    const ctx = this.ctx;
+    ctx.save();
+    this._drawShape(sx, sy, w, h, true, radius);
+    ctx.clip();
+    ctx.globalAlpha = 0.55;
+    const tileSize = 34; // screen px per tile, independent of room scale
+    for (let ty = sy; ty < sy + h; ty += tileSize) {
+      for (let tx = sx; tx < sx + w; tx += tileSize) {
+        ctx.drawImage(img, tx, ty, tileSize, tileSize);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  _drawRoomPropsSprites(zone, sx, sy, w, h) {
+    const props = PROPS_FOR_ROOM[zone.id];
+    if (!props) return;
+    const ctx = this.ctx;
+    for (const p of props) {
+      const img = this._getImage(`prop:${p.img}`, `/sprites/props/${p.img}.png`);
+      if (!img.complete || img.naturalWidth === 0) continue;
+      const baseSize = 2.1 * this.scale * p.scale; // world-unit-ish sizing
+      const aspect = img.naturalWidth / img.naturalHeight;
+      const drawW = baseSize;
+      const drawH = baseSize / aspect;
+      const px = sx + w * p.x - drawW / 2;
+      const py = sy + h * p.y - drawH * 0.75; // anchor near the "base" of the object
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.5)";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 3;
+      ctx.drawImage(img, px, py, drawW, drawH);
+      ctx.restore();
+    }
+  }
+
   _getCracksForRoom(zone) {
     const cached = this.crackCache.get(zone.id);
     if (cached && cached.round === this.round) return cached.cracks;
@@ -330,8 +387,43 @@ export class GameScene2D {
     ctx.restore();
   }
 
+  _drawDoorways() {
+    // Punches a visible gap through the room wall-frame drawn in _drawZone
+    // exactly where DOORWAYS (rooms.js) says the collision system actually
+    // lets a player cross — so what looks open is what IS open, instead of
+    // every room drawing an unbroken wall-frame regardless of what
+    // corridors connect to it.
+    const ctx = this.ctx;
+    const band = WALL_FRAME + 2; // px — a little wider than the frame itself so it fully punches through
+    const frameColor = "rgba(220, 190, 120, 0.55)"; // warm accent reading as a door frame, not just a hole
+    for (const d of DOORWAYS) {
+      if (d.axis === "x") {
+        const p0 = this.worldToScreen(d.start, d.edge);
+        const p1 = this.worldToScreen(d.end, d.edge);
+        const left = Math.min(p0.sx, p1.sx);
+        const width = Math.abs(p1.sx - p0.sx);
+        const topY = p0.sy - band;
+        ctx.fillStyle = CORRIDOR_COLOR;
+        ctx.fillRect(left, topY, width, band * 2);
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(left - 2, topY, 3, band * 2);
+        ctx.fillRect(left + width - 1, topY, 3, band * 2);
+      } else {
+        const p0 = this.worldToScreen(d.edge, d.start);
+        const p1 = this.worldToScreen(d.edge, d.end);
+        const top = Math.min(p0.sy, p1.sy);
+        const height = Math.abs(p1.sy - p0.sy);
+        const leftX = p0.sx - band;
+        ctx.fillStyle = CORRIDOR_COLOR;
+        ctx.fillRect(leftX, top, band * 2, height);
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(leftX, top - 2, band * 2, 3);
+        ctx.fillRect(leftX, top + height - 1, band * 2, 3);
+      }
+    }
+  }
+
   _drawZone(zone, isRoom) {
-    if (isRoom && this.visibleRoomId && zone.id !== this.visibleRoomId) return;
     const { sx, sy } = this.worldToScreen(zone.x, zone.z);
     const w = zone.w * this.scale;
     const h = zone.d * this.scale;
@@ -351,27 +443,20 @@ export class GameScene2D {
     this._drawShape(sx, sy + depth, w, h, isRoom, radius);
     ctx.fill();
 
-    const roomImage = isRoom && this.images.get(`room:${zone.id}`);
+    const grad = ctx.createLinearGradient(sx, sy, sx, sy + h);
+    grad.addColorStop(0, shade(baseColor, 0.2));
+    grad.addColorStop(1, shade(baseColor, -0.15));
+    ctx.fillStyle = grad;
     this._drawShape(sx, sy, w, h, isRoom, radius);
-    ctx.save();
-    ctx.clip();
-    if (roomImage && roomImage.complete && roomImage.naturalWidth > 0) {
-      ctx.drawImage(roomImage, sx, sy, w, h);
-      ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
-      ctx.fillRect(sx, sy, w, h);
-    } else {
-      const grad = ctx.createLinearGradient(sx, sy, sx, sy + h);
-      grad.addColorStop(0, shade(baseColor, 0.2));
-      grad.addColorStop(1, shade(baseColor, -0.15));
-      ctx.fillStyle = grad;
-      ctx.fillRect(sx, sy, w, h);
-    }
-    ctx.restore();
+    ctx.fill();
 
     if (isRoom) {
+      this._drawFloorTexture(zone, sx, sy, w, h, radius);
+
       ctx.save();
       this._drawShape(sx, sy, w, h, isRoom, radius);
       ctx.clip();
+      this._drawRoomPropsSprites(zone, sx, sy, w, h);
       this._drawCracks(sx, sy, this._getCracksForRoom(zone));
       ctx.restore();
     }
@@ -416,14 +501,18 @@ export class GameScene2D {
     // the last server echo — see setSelfMotion() for why.
     const drawX = isSelf && this.selfPos ? this.selfPos.x : p.x;
     const drawZ = isSelf && this.selfPos ? this.selfPos.z : p.z;
-    const playerRoom = roomAt(drawX, drawZ);
-    if (!isSelf && this.visibleRoomId && playerRoom?.id !== this.visibleRoomId) return;
     const { sx, sy } = this.worldToScreen(drawX, drawZ);
     const ctx = this.ctx;
     const anim = this.animState.get(p.playerId);
-    const pose = anim && anim.moving ? `walk_${anim.walkFrame + 1}` : `dir_${(anim && anim.facing) || "front"}`;
+    const facing = (anim && anim.facing) || "front";
+    // Left-facing walk uses its own mirrored frame set (walk_left_N) instead
+    // of reusing the right-facing walk_N frames — matching the reference
+    // sheet's rule that LEFT is a horizontal mirror of RIGHT, for the walk
+    // cycle just as much as the static pose.
+    const pose = anim && anim.moving
+      ? (facing === "left" ? `walk_left_${anim.walkFrame + 1}` : `walk_${anim.walkFrame + 1}`)
+      : `dir_${facing}`;
     const img = this._charPoseImage(p.color, pose);
-    const mirrorHorizontal = pose === "dir_left";
 
     ctx.globalAlpha = p.connected === false ? 0.35 : this.viewerIsGhost && !isSelf ? 0.55 : 1;
 
@@ -439,15 +528,7 @@ export class GameScene2D {
       if (this.viewerIsGhost && !isSelf) {
         ctx.filter = "hue-rotate(220deg) saturate(0.6)";
       }
-      if (mirrorHorizontal) {
-        ctx.save();
-        ctx.translate(sx, 0);
-        ctx.scale(-1, 1);
-        ctx.drawImage(img, -drawW / 2, sy - drawH + 10, drawW, drawH);
-        ctx.restore();
-      } else {
-        ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10, drawW, drawH);
-      }
+      ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10, drawW, drawH);
       ctx.filter = "none";
     } else {
       // Fallback while the sprite loads: a simple colored dot so players
@@ -502,6 +583,7 @@ export class GameScene2D {
 
     for (const c of CORRIDORS) this._drawZone(c, false);
     for (const r of ROOMS) this._drawZone(r, true);
+    this._drawDoorways();
 
     const sorted = [...this.players].sort((a, b) => a.z - b.z);
     for (const p of sorted) this._drawPlayer(p);

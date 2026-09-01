@@ -144,11 +144,7 @@ export class Room {
     // role:updated (the moment they flip) — neither fires again on
     // reconnect, so a converted player who reconnects would be stuck
     // thinking they're still Innocent. Resend their current status.
-    this.emitToPlayer(player.playerId, "role:updated", {
-      isCorrupted: player.isCorrupted,
-      corruptedSinceRound: player.corruptedSinceRound,
-      hasStolenThisRound: player.hasStolenThisRound,
-    });
+    this.emitToPlayer(player.playerId, "role:updated", { isCorrupted: player.isCorrupted });
 
     // If they reconnected mid-vote, refresh the "X / Y votes cast" count
     // for everyone — they now count toward the total being waited on again.
@@ -376,8 +372,6 @@ export class Room {
       this.emitToPlayer(p.playerId, "role:assigned", {
         isOC: p.isOC,
         isCorrupted: p.isCorrupted,
-        corruptedSinceRound: p.corruptedSinceRound,
-        hasStolenThisRound: p.hasStolenThisRound,
         cards: p.cards,
       });
     }
@@ -438,11 +432,14 @@ export class Room {
     const deadline = Date.now() + this.config.powerOutageSeconds * 1000;
     this.setPhase(PHASES.POWER_OUTAGE, deadline);
 
-    // Failsafe: auto-restore if nobody manually restores in time, so the
-    // game can never stall waiting on a single player.
+    // No more auto-restore. Power staying off is now a real loss condition:
+    // if the crew can't get the required headcount into the Power Room and
+    // restoring within the timer, Corrupted wins outright — same idea as
+    // Among Us's sabotage-timeout, and it's what actually forces everyone to
+    // go deal with it instead of just waiting the blackout out.
     this.timers.powerFailsafe = setTimeout(() => {
       if (this.phase === PHASES.POWER_OUTAGE) {
-        this._restorePower(true);
+        this._endGame("CORRUPTED");
       }
     }, this.config.powerOutageSeconds * 1000);
   }
@@ -474,17 +471,17 @@ export class Room {
     if (count < needed) {
       return { ok: true, waitingForMore: true, count, needed };
     }
-    this._restorePower(false);
+    this._restorePower();
     return { ok: true };
   }
 
-  _restorePower(auto) {
+  _restorePower() {
     if (this.timers.powerFailsafe) {
       clearTimeout(this.timers.powerFailsafe);
       delete this.timers.powerFailsafe;
     }
     this.powerOn = true;
-    this.io.to(this.roomKey).emit("power:state", { on: true, auto });
+    this.io.to(this.roomKey).emit("power:state", { on: true });
     this._startFreeRoam();
   }
 
@@ -538,13 +535,22 @@ export class Room {
     }, this.config.discussionSeconds * 1000);
   }
 
-  handleHostSkipDiscussion() {
-    if (this.phase !== PHASES.DISCUSSION) {
-      return { ok: false, reason: "Discussion is not active." };
+  // Host-only: cut a discussion period short, whether it's the regular
+  // pre-vote DISCUSSION or the TIE_CLARIFY window before a re-vote. Skips
+  // straight to whichever phase that discussion was building up to, same as
+  // if its timer had just run out.
+  handleSkipDiscussion() {
+    if (this.phase === PHASES.DISCUSSION) {
+      if (this.timers.discussionEnd) clearTimeout(this.timers.discussionEnd);
+      this._startVoting();
+      return { ok: true };
     }
-    if (this.timers.discussionEnd) clearTimeout(this.timers.discussionEnd);
-    this._startVoting();
-    return { ok: true };
+    if (this.phase === PHASES.TIE_CLARIFY) {
+      if (this.timers.tieClarifyEnd) clearTimeout(this.timers.tieClarifyEnd);
+      this._startTieVote();
+      return { ok: true };
+    }
+    return { ok: false, reason: "No discussion is running right now." };
   }
 
   handleCallMeeting(playerId) {
@@ -597,13 +603,16 @@ export class Room {
     if (!voter || !voter.alive) return { ok: false, reason: "Ghosts cannot vote." };
     if (this.votes.has(voterId)) return { ok: false, reason: "You already voted." };
 
-    if (targetId !== null) {
+    // "ABSTAIN" is a real, valid vote — it just never counts toward any
+    // candidate's tally (see _tallyVotes). Skip the target-existence/
+    // tie-candidate checks below for it; there's no player to validate.
+    if (targetId !== "ABSTAIN") {
       const target = this.players.get(targetId);
       if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
-    }
 
-    if (targetId !== null && this.phase === PHASES.TIE_VOTE && !this.tieCandidates.includes(targetId)) {
-      return { ok: false, reason: "You may only vote for tied candidates." };
+      if (this.phase === PHASES.TIE_VOTE && !this.tieCandidates.includes(targetId)) {
+        return { ok: false, reason: "You may only vote for tied candidates." };
+      }
     }
 
     this.votes.set(voterId, targetId);
@@ -632,7 +641,7 @@ export class Room {
     const counts = new Map();
     for (const [voterId, targetId] of this.votes.entries()) {
       if (!eligibleVoterIds.includes(voterId)) continue;
-      if (targetId === null) continue;
+      if (targetId === "ABSTAIN") continue; // counted toward turnout, never toward a candidate
       counts.set(targetId, (counts.get(targetId) || 0) + 1);
     }
 
@@ -771,9 +780,6 @@ export class Room {
     if (!attacker || !attacker.alive) return { ok: false, reason: "Ghosts cannot steal." };
     if (FROZEN_PHASES.has(this.phase)) return { ok: false, reason: "Can't steal while everyone's gathered at the table." };
     if (!attacker.isCorrupted) return { ok: false, reason: "Only Corrupted players can steal." };
-    if (attacker.corruptedSinceRound === this.round) {
-      return { ok: false, reason: "You can steal starting next round." };
-    }
     if (attacker.hasStolenThisRound) return { ok: false, reason: "You already stole this round." };
 
     const target = this.players.get(targetId);
@@ -833,11 +839,7 @@ export class Room {
       // game.isCorrupted client-side, so it simply never appeared, even
       // though the server would have happily accepted a steal request.
       // Sent to this player only — still secret from everyone else.
-      this.emitToPlayer(playerId, "role:updated", {
-        isCorrupted: true,
-        corruptedSinceRound: player.corruptedSinceRound,
-        hasStolenThisRound: player.hasStolenThisRound,
-      });
+      this.emitToPlayer(playerId, "role:updated", { isCorrupted: true });
     }
     // Silent either way — no broadcast to other players, this must stay
     // completely secret from them. The Host's private monitor view is the
@@ -908,9 +910,12 @@ export class Room {
 
     // Authoritative wall collision: reject any position that isn't inside a
     // room or corridor. A small margin keeps movement feeling smooth right
-    // up against a wall rather than stopping a full player-radius short of it.
-    const nx = Math.max(-40, Math.min(36, x));
-    const nz = Math.max(-28, Math.min(34, z));
+    // up against a wall rather than stopping a full player-radius short of
+    // it. Bounds must match client GameScreen.jsx's local-prediction clamp
+    // and rooms.js/constants.js's actual room extents — keep all three in
+    // sync any time the world is rescaled (see the 1.5x pass comment there).
+    const nx = Math.max(-60, Math.min(60, x));
+    const nz = Math.max(-39, Math.min(39, z));
     if (!isWalkable(nx, nz, 0.3)) {
       return; // Move rejected — player stays at their last valid position.
     }
@@ -935,7 +940,6 @@ export class Room {
       players: this.livingPlayers().map((p) => ({
         playerId: p.playerId,
         displayName: p.displayName,
-        color: p.color,
         x: p.x,
         z: p.z,
       })),

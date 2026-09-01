@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { GameScene3D } from "../scenes/GameScene3D.js";
+import { GameScene2D } from "../scenes/GameScene2D.js";
 
 const IDENTITY_LABEL = {
   INNOCENT: "INNOCENT",
@@ -12,13 +12,15 @@ const IDENTITY_LABEL = {
 // Host an unfiltered positions feed — see Room.broadcastPositions — this
 // was just never rendered on the client), plus the roles/cards panel the
 // Host previously had on its own with no gameplay context around it.
-export default function HostGameView({ code, phase, round, powerOn, hostRoles, positions, playersById = {}, onSkipDiscussion, onEnd }) {
+export default function HostGameView({ code, phase, round, powerOn, hostRoles, positions, playersById = {}, onEnd, onSkipDiscussion }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const [panelOpen, setPanelOpen] = useState(true);
 
+  const canSkipDiscussion = phase === "DISCUSSION" || phase === "TIE_CLARIFY";
+
   useEffect(() => {
-    const scene = new GameScene3D(containerRef.current, { scale: 9 });
+    const scene = new GameScene2D(containerRef.current, { scale: 9 });
     scene.focusOn(0, 0); // whole-ship view, centered on Cafeteria — the Host doesn't walk around
     sceneRef.current = scene;
     return () => scene.dispose();
@@ -44,6 +46,12 @@ export default function HostGameView({ code, phase, round, powerOn, hostRoles, p
         <div className={`hud-badge ${powerOn ? "power-on" : "power-off"}`}>{powerOn ? "POWER ON" : "POWER OUT"}</div>
       </div>
 
+      {canSkipDiscussion && (
+        <button className="btn host-skip-btn" onClick={onSkipDiscussion}>
+          SKIP DISCUSSION ▸
+        </button>
+      )}
+
       <div className={`host-roles-sheet ${panelOpen ? "open" : "collapsed"}`}>
         <button className="host-roles-toggle" onClick={() => setPanelOpen((v) => !v)}>
           {panelOpen ? "HIDE ROLES ▾" : `ROLES & CARDS (only you can see this) ▸`}
@@ -68,11 +76,6 @@ export default function HostGameView({ code, phase, round, powerOn, hostRoles, p
       <button className="btn btn-danger host-end-btn" onClick={onEnd}>
         END ROOM
       </button>
-      {phase === "DISCUSSION" && (
-        <button className="btn host-skip-btn" onClick={onSkipDiscussion}>
-          SKIP DISCUSSION
-        </button>
-      )}
     </div>
   );
 }

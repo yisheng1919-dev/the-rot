@@ -315,11 +315,15 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
 
 .host-skip-btn {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top));
-  right: max(112px, calc(env(safe-area-inset-right) + 98px));
+  top: max(54px, calc(env(safe-area-inset-top) + 40px));
+  right: max(14px, env(safe-area-inset-right));
   z-index: 11;
   padding: 8px 14px;
   font-size: 12px;
+  background: var(--neon-purple);
+  border: none;
+  color: #fff;
+  font-weight: 700;
 }
 
 /* ---------- Game screen layout ---------- */
@@ -616,6 +620,11 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
   border-color: var(--neon-cyan);
   box-shadow: 0 0 0 2px var(--neon-cyan) inset;
 }
+.vote-abstain-btn {
+  width: 100%;
+  margin-top: 10px;
+  opacity: 0.85;
+}
 
 .meeting-table-wrap {
   position: absolute;
@@ -718,6 +727,48 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
   text-transform: uppercase;
   pointer-events: none;
   text-shadow: 0 0 6px rgba(0,0,0,0.8);
+}
+
+.oc-steal-hint {
+  position: absolute;
+  top: max(70px, calc(env(safe-area-inset-top) + 56px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--emergency-red);
+  background: rgba(10, 14, 28, 0.75);
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgba(0,0,0,0.8);
+  white-space: nowrap;
+}
+
+.zoom-controls {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(10, 14, 28, 0.75);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .power-guide-panel {

@@ -90,12 +90,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("host:skipDiscussion", (_payload, ack) => {
-    const room = roomManager.getRoom(socket.data.roomCode);
-    if (!room || room.hostSocketId !== socket.id) return ack?.({ ok: false, reason: "Not authorized." });
-    ack?.(room.handleHostSkipDiscussion());
-  });
-
   socket.on("host:endRoom", (_payload, ack) => {
     safe(socket, () => {
       const room = roomManager.getRoom(socket.data.roomCode);
@@ -104,6 +98,14 @@ io.on("connection", (socket) => {
       io.to(room.roomKey).emit("room:ended");
       roomManager.removeRoom(room.code);
       ack?.({ ok: true });
+    });
+  });
+
+  socket.on("host:skipDiscussion", (_payload, ack) => {
+    safe(socket, () => {
+      const room = roomManager.getRoom(socket.data.roomCode);
+      if (!room || room.hostSocketId !== socket.id) throw new Error("Not authorized.");
+      ack?.(room.handleSkipDiscussion());
     });
   });
 
@@ -143,8 +145,6 @@ io.on("connection", (socket) => {
         alive: player.alive,
         isOC: player.isOC,
         isCorrupted: player.isCorrupted,
-        corruptedSinceRound: player.corruptedSinceRound,
-        hasStolenThisRound: player.hasStolenThisRound,
         cards: player.cards,
         color: player.color,
         x: player.x,
