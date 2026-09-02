@@ -4,7 +4,6 @@ import {
   DEFAULT_CONFIG,
   ROOMS,
   POWER_ROOM_ZONE,
-  MAP_ROOM_ZONE,
   STEAL_RANGE,
   IDENTITY,
   identityOf,
@@ -111,6 +110,7 @@ export class Room {
 
       stealHistory: new Set(), // targetIds this player has stolen from, ever
       hasStolenThisRound: false,
+      lastStealAt: null, // timestamp of last successful steal, for stealCooldownSeconds
       corruptedSinceRound: null, // round number they flipped, null if always innocent/started corrupted-ineligible
     };
 
@@ -411,6 +411,17 @@ export class Room {
         p.isCorrupted &&
         (p.corruptedSinceRound === null || p.corruptedSinceRound < this.round);
       p.hasStolenThisRound = !eligible; // if not eligible this round, treat as "already used"
+    }
+
+    // Defensive resync: re-send everyone's own isCorrupted status at the
+    // start of every round, not just once at the moment they flip. The
+    // single at-conversion-time role:updated (handleCorruptionChoice) is a
+    // fragile one-shot signal — if it's ever missed client-side for any
+    // reason, this guarantees the player's real status self-heals within
+    // one round instead of leaving them silently stuck thinking they're
+    // still Innocent.
+    for (const p of this.livingPlayers()) {
+      this.emitToPlayer(p.playerId, "role:updated", { isCorrupted: p.isCorrupted });
     }
 
     this.setPhase(PHASES.ROUND_START);
@@ -756,19 +767,16 @@ export class Room {
   }
 
   _checkEndOfRound3() {
-    const living = this.livingPlayers();
-    const livingCorrupted = living.filter((p) => p.isCorrupted).length;
-    const livingInnocent = living.filter((p) => !p.isCorrupted).length;
-    if (livingCorrupted > livingInnocent) {
-      this._endGame("CORRUPTED");
-    } else {
-      // Corrupted did not outnumber Innocents at the end of round 3, and the
-      // OC was never eliminated -> nobody technically "won" by the letter of
-      // the two conditions. We resolve this in Innocents' favor, since the
-      // OC surviving without a Corrupted majority does not meet the
-      // Corrupted win condition either.
-      this._endGame("INNOCENTS");
-    }
+    // Reaching this function at all means the Original Corrupted survived
+    // every round: their elimination is handled immediately and separately
+    // up in _eliminate (identity === ORIGINAL_CORRUPTED short-circuits
+    // straight to an Innocents win, and this function is never reached in
+    // that case). So per the actual win condition — OC still alive once the
+    // rounds run out is a Corrupted win outright — this no longer needs to
+    // check the surviving headcount split at all; that used to let
+    // Innocents win on a technicality (OC alive, but not enough Corrupted
+    // recruits to hit a majority) that contradicted the stated rule.
+    this._endGame("CORRUPTED");
   }
 
   // ---------------------------------------------------------------------
@@ -782,6 +790,20 @@ export class Room {
     if (!attacker.isCorrupted) return { ok: false, reason: "Only Corrupted players can steal." };
     if (attacker.hasStolenThisRound) return { ok: false, reason: "You already stole this round." };
 
+    // stealCooldownSeconds existed in config from the start but was never
+    // actually enforced anywhere — the only real limit was the once-per-
+    // round flag above, which is a much longer window in practice, so this
+    // rarely changes anything today. Wiring it up anyway rather than
+    // deleting it: it's real protection against any future change that
+    // relaxes the once-per-round rule (e.g. multiple steals per round) or
+    // any client bug that fires a rapid burst of steal requests, without
+    // changing today's actual gameplay pacing.
+    const cooldownMs = this.config.stealCooldownSeconds * 1000;
+    if (attacker.lastStealAt && Date.now() - attacker.lastStealAt < cooldownMs) {
+      const waitSec = Math.ceil((cooldownMs - (Date.now() - attacker.lastStealAt)) / 1000);
+      return { ok: false, reason: `Wait ${waitSec}s before stealing again.` };
+    }
+
     const target = this.players.get(targetId);
     if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
     if (target.playerId === attacker.playerId) return { ok: false, reason: "You cannot steal from yourself." };
@@ -794,6 +816,7 @@ export class Room {
 
     // All checks passed — commit the steal.
     attacker.hasStolenThisRound = true;
+    attacker.lastStealAt = Date.now();
     attacker.stealHistory.add(targetId);
     target.cards -= 1;
     attacker.cards += 1;
@@ -925,25 +948,27 @@ export class Room {
     // This was the actual bug behind "I can't see anyone on the map" — a
     // player's new position was recorded here but never actually pushed
     // out to anyone. broadcastPositions() is what turns local movement
-    // into everyone else's live view.
+    // into everyone else's live view. (MapRoomPanel now reads straight from
+    // that live positions feed — the old maproom:data event this handler
+    // used to also emit here is gone; nothing on the client has listened
+    // for it since that fix.)
     this.broadcastPositions();
 
-    const inMapRoom = pointInZone(player.x, player.z, MAP_ROOM_ZONE);
-    if (inMapRoom) {
-      this.emitToPlayer(playerId, "maproom:data", this._mapRoomPayload());
+    // The restore-power headcount only used to get re-checked when someone
+    // actually pressed the button — so if a player left the Power Room
+    // without anyone else pressing it afterward, everyone kept seeing a
+    // stale, too-high count until the next press. Re-validate live on every
+    // move instead, same as the button-press path does.
+    if (
+      this.phase === PHASES.POWER_OUTAGE &&
+      this.powerRestorers &&
+      this.powerRestorers.has(playerId) &&
+      !pointInZone(nx, nz, POWER_ROOM_ZONE)
+    ) {
+      this.powerRestorers.delete(playerId);
+      const needed = Math.min(this.config.powerRestoreRequiredPlayers, this.livingPlayers().length);
+      this.io.to(this.roomKey).emit("power:restoreProgress", { count: this.powerRestorers.size, needed });
     }
-  }
-
-  _mapRoomPayload() {
-    return {
-      you: null, // filled in per-recipient by caller if needed; kept generic here
-      players: this.livingPlayers().map((p) => ({
-        playerId: p.playerId,
-        displayName: p.displayName,
-        x: p.x,
-        z: p.z,
-      })),
-    };
   }
 
   // ---------------------------------------------------------------------

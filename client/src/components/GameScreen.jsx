@@ -352,13 +352,18 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
       {game.corruptionPromptOpen && (
         <CorruptionPrompt
           onChoose={(becomeCorrupted) => {
-            socket.emit("player:corruptionChoice", { becomeCorrupted });
+            // This used to fire-and-forget with no ack — if the server ever
+            // rejected the choice (e.g. "No pending choice", a stale/late
+            // click after the window already closed), the client had no way
+            // to know and would show the "you are now corrupted" confirmation
+            // regardless, leaving the player thinking they'd flipped when the
+            // server never actually recorded it. Now only trust a
+            // server-confirmed ok before showing that confirmation.
+            socket.emit("player:corruptionChoice", { becomeCorrupted }, (res) => {
+              if (becomeCorrupted && res?.ok) setShowCorruptionRevealed(true);
+              else if (becomeCorrupted && !res?.ok) onErrorToast(res?.reason || "Could not process your choice — please try again.");
+            });
             game.onCorruptionResolved?.();
-            // role:updated (which flips game.isCorrupted) arrives from the
-            // server right after this, but the player already knows their
-            // own choice — show the confirmation immediately rather than
-            // waiting on that round-trip.
-            if (becomeCorrupted) setShowCorruptionRevealed(true);
           }}
         />
       )}

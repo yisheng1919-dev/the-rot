@@ -396,12 +396,23 @@ export class GameScene2D {
     const ctx = this.ctx;
     const band = WALL_FRAME + 2; // px — a little wider than the frame itself so it fully punches through
     const frameColor = "rgba(220, 190, 120, 0.55)"; // warm accent reading as a door frame, not just a hole
+    // Rooms are octagons now with a real (post-rescale) visible chamfer —
+    // see _drawZone. A doorway segment that spans a room's full straight
+    // edge (most of ours do — that's literally how wide the corridor was
+    // built) would bleed past where that edge is actually straight and
+    // into the angled octagon corner past each end. Inset the drawn
+    // segment by the same chamfer amount so the visible opening stays on
+    // the flat wall section it's supposed to be cut into.
+    const CHAMFER_PX = 60; // must match the room chamfer cap in _drawZone
     for (const d of DOORWAYS) {
       if (d.axis === "x") {
         const p0 = this.worldToScreen(d.start, d.edge);
         const p1 = this.worldToScreen(d.end, d.edge);
-        const left = Math.min(p0.sx, p1.sx);
-        const width = Math.abs(p1.sx - p0.sx);
+        let left = Math.min(p0.sx, p1.sx);
+        let width = Math.abs(p1.sx - p0.sx);
+        const inset = Math.min(CHAMFER_PX, width * 0.4);
+        left += inset;
+        width -= inset * 2;
         const topY = p0.sy - band;
         ctx.fillStyle = CORRIDOR_COLOR;
         ctx.fillRect(left, topY, width, band * 2);
@@ -411,8 +422,11 @@ export class GameScene2D {
       } else {
         const p0 = this.worldToScreen(d.edge, d.start);
         const p1 = this.worldToScreen(d.edge, d.end);
-        const top = Math.min(p0.sy, p1.sy);
-        const height = Math.abs(p1.sy - p0.sy);
+        let top = Math.min(p0.sy, p1.sy);
+        let height = Math.abs(p1.sy - p0.sy);
+        const inset = Math.min(CHAMFER_PX, height * 0.4);
+        top += inset;
+        height -= inset * 2;
         const leftX = p0.sx - band;
         ctx.fillStyle = CORRIDOR_COLOR;
         ctx.fillRect(leftX, top, band * 2, height);
@@ -428,7 +442,16 @@ export class GameScene2D {
     const w = zone.w * this.scale;
     const h = zone.d * this.scale;
     const ctx = this.ctx;
-    const radius = isRoom ? 22 : 4;
+    // Rooms are drawn as proper octagons (_drawOctagon), matching the
+    // reference blueprint's faceted room style — but this used to be a
+    // fixed 22px chamfer regardless of room size. After this session's
+    // world-scale pass (1.5x) and camera-zoom bump (24->32px/unit), rooms
+    // render at 384-1920 screen px wide, so a fixed 22px corner-cut had
+    // shrunk to a barely-visible nick — the octagon shape was technically
+    // there but read as "just a rectangle" at these sizes. Scaling the
+    // chamfer to the room's own screen size keeps the faceted look
+    // consistent (and visible) across both the smallest and largest rooms.
+    const radius = isRoom ? Math.min(60, Math.min(w, h) * 0.18) : 4;
     const depth = isRoom ? WALL_DEPTH : CORRIDOR_WALL_DEPTH;
     const baseColor = isRoom ? zone.color : CORRIDOR_COLOR;
     const wallColor = shade(baseColor, -0.62);
@@ -516,35 +539,40 @@ export class GameScene2D {
 
     ctx.globalAlpha = p.connected === false ? 0.35 : this.viewerIsGhost && !isSelf ? 0.55 : 1;
 
+    // Character size used to be a flat 42px, completely independent of
+    // this.scale — unlike everything else in the scene (rooms, corridors,
+    // furniture, the vision circle, the room chamfer), which all multiply
+    // by this.scale. That was fine back when scale was a fixed 24px/unit,
+    // but this session's camera-zoom bump (24->32) and 1.5x world-scale
+    // pass both made rooms/corridors/furniture render noticeably bigger on
+    // screen while the character sprite itself stayed pinned at the same
+    // 42px — so characters had visibly shrunk relative to the rooms around
+    // them. 1.75 is just 42/24, preserving the exact original tuning at the
+    // old default scale while now correctly growing/shrinking with camera
+    // zoom like everything else does.
+    const drawH = 1.75 * this.scale;
+    const k = drawH / 42; // scales the shadow/self-ring offsets below by the same ratio
+
     // Grounding shadow.
     ctx.beginPath();
     ctx.fillStyle = "rgba(0,0,0,0.45)";
-    ctx.ellipse(sx, sy + 12, 13, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + 12 * k, 13 * k, 5 * k, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (img.complete && img.naturalWidth > 0) {
-      const drawH = 42;
       const drawW = drawH * (img.naturalWidth / img.naturalHeight);
       if (this.viewerIsGhost && !isSelf) {
         ctx.filter = "hue-rotate(220deg) saturate(0.6)";
       }
-      ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10, drawW, drawH);
+      ctx.drawImage(img, sx - drawW / 2, sy - drawH + 10 * k, drawW, drawH);
       ctx.filter = "none";
     } else {
       // Fallback while the sprite loads: a simple colored dot so players
       // aren't invisible for the first frame or two.
       ctx.beginPath();
       ctx.fillStyle = isSelf ? "#35e6d0" : "#dfe6ff";
-      ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+      ctx.arc(sx, sy, 10 * k, 0, Math.PI * 2);
       ctx.fill();
-    }
-
-    if (isSelf) {
-      ctx.beginPath();
-      ctx.strokeStyle = "#35e6d0";
-      ctx.lineWidth = 2;
-      ctx.arc(sx, sy + 10, 15, 0, Math.PI * 2);
-      ctx.stroke();
     }
 
     ctx.globalAlpha = 1;
@@ -590,7 +618,22 @@ export class GameScene2D {
 
     if (this.blackout) {
       const cx = this.cssWidth / 2, cy = this.cssHeight / 2;
-      const vision = ctx.createRadialGradient(cx, cy, 170, cx, cy, 300);
+      // These used to be fixed screen-pixel radii (170/300px), independent
+      // of this.scale. That was the actual bug behind "blackout vision
+      // looks the same as normal" — once the camera scale/zoom or world
+      // size changed, that fixed pixel circle could end up covering most
+      // of an actual mobile screen (300px against a ~380px-wide viewport
+      // is nearly edge-to-edge), leaving almost nothing actually darkened.
+      // Defining the radius in WORLD units and multiplying by this.scale
+      // keeps it a genuinely tight circle around the player regardless of
+      // camera scale or zoom level — zooming in/out changes how big that
+      // same real visible area looks on screen, exactly like real vision.
+      const innerWorld = 2.2;
+      const outerWorld = 4;
+      const vision = ctx.createRadialGradient(
+        cx, cy, innerWorld * this.scale,
+        cx, cy, outerWorld * this.scale
+      );
       vision.addColorStop(0, "rgba(3,4,10,0)");
       vision.addColorStop(1, "rgba(3,4,10,0.97)");
       ctx.fillStyle = vision;

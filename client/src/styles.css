@@ -360,7 +360,7 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
 .hud-badge.power-off { color: var(--emergency-red); animation: pulse 1s infinite; }
 .hud-badge.power-on { color: var(--safe-green); }
 .hud-badge.cards { color: var(--warm-glow); }
-.hud-badge.room-label { color: var(--neon-purple); font-size: 11px; }
+.hud-badge.room-label { color: var(--neon-purple); font-size: 11px; padding: 6px 10px; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -369,7 +369,16 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
 
 .phase-banner {
   position: absolute;
-  top: 60px;
+  /* This used to be a fixed 60px, which assumed the hud-top badges (Round /
+     Power / Room name) always fit on a single line. They don't always —
+     longer room names like "MEDBAY" or "CONTROL ROOM" next to "ROUND 2" and
+     "POWER ON" can wrap onto a second line on a narrow phone, and that
+     wrapped line sits right around 60px down, so the phase banner ended up
+     drawn right on top of it, clipping the room badge. Pushing this down
+     with real safe-area awareness gives room for that wrapped second line
+     to exist without a collision, regardless of screen width.
+  */
+  top: calc(max(14px, env(safe-area-inset-top)) + 86px);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(11, 14, 26, 0.85);
