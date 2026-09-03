@@ -483,6 +483,7 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
 
 .action-btn.power { background: linear-gradient(135deg, var(--warm-glow), #d97b1f); color: #201200; }
 .action-btn.steal { background: linear-gradient(135deg, var(--corrupted), #8a1f38); color: white; }
+.action-btn.steal:disabled { opacity: 0.5; }
 .action-btn.meeting { background: linear-gradient(135deg, var(--neon-purple), #5a35c9); color: white; }
 .action-btn.map { background: linear-gradient(135deg, var(--innocent), #1c6fbf); color: #041624; }
 
@@ -738,7 +739,7 @@ input[type="text"]:focus { border-color: var(--neon-cyan); }
   text-shadow: 0 0 6px rgba(0,0,0,0.8);
 }
 
-.oc-steal-hint {
+.steal-lock-hint {
   position: absolute;
   top: max(70px, calc(env(safe-area-inset-top) + 56px));
   left: 50%;

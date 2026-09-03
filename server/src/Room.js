@@ -108,9 +108,11 @@ export class Room {
       x: 0,
       z: 0,
 
-      stealHistory: new Set(), // targetIds this player has stolen from, ever
       hasStolenThisRound: false,
       lastStealAt: null, // timestamp of last successful steal, for stealCooldownSeconds
+      stealHistory: new Set(), // targetIds this player has personally stolen from, ever — same pair can never repeat
+      cardsStolen: 0, // total successful steals this player has made, ever — used for the Corrupted-win MVP
+      hasBeenOfferedCorruptionChoice: false, // the choice is offered once per victim, ever, regardless of what they pick
       corruptedSinceRound: null, // round number they flipped, null if always innocent/started corrupted-ineligible
     };
 
@@ -750,11 +752,10 @@ export class Room {
     }
   }
 
-  // Same threshold _checkEndOfRound3 uses ("strictly more Corrupted than
-  // Innocent" — a tie still favors Innocents, per that function's comment),
-  // just evaluated immediately instead of only at the end of round 3. This
-  // is what makes "all Innocents are dead" declare Corrupted the winner on
-  // the spot instead of leaving the round running with nobody left to play.
+  // Corrupted can win the instant they outnumber the living Innocents,
+  // rather than only at the scheduled end of round 3 — otherwise a round
+  // where the Innocents get wiped out (or outnumbered) mid-round would just
+  // keep running with nobody left who could plausibly turn it around.
   _checkMidGameWin() {
     const living = this.livingPlayers();
     const livingCorrupted = living.filter((p) => p.isCorrupted).length;
@@ -807,6 +808,14 @@ export class Room {
     const target = this.players.get(targetId);
     if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
     if (target.playerId === attacker.playerId) return { ok: false, reason: "You cannot steal from yourself." };
+    // Per-pair permanent block: once attacker X has successfully stolen
+    // from victim Y, X specifically can never steal from Y again for the
+    // rest of the game. This does NOT block a DIFFERENT attacker from
+    // targeting Y — that mix-up was the actual reported bug last time
+    // (over-corrected by deleting this whole mechanism). The precise rule,
+    // confirmed with an exact example: A steals from B, B turns Corrupted
+    // — A can never steal from B again, but B (now Corrupted) can freely
+    // steal from A or C next round, and C can still steal from B too.
     if (attacker.stealHistory.has(targetId)) {
       return { ok: false, reason: "You've already stolen from this player." };
     }
@@ -818,6 +827,7 @@ export class Room {
     attacker.hasStolenThisRound = true;
     attacker.lastStealAt = Date.now();
     attacker.stealHistory.add(targetId);
+    attacker.cardsStolen = (attacker.cardsStolen || 0) + 1; // for the end-game MVP
     target.cards -= 1;
     attacker.cards += 1;
 
@@ -831,8 +841,17 @@ export class Room {
       return { ok: true, targetDied: true };
     }
 
-    if (!target.isCorrupted) {
-      // Innocent survives the theft -> gets the secret choice.
+    // The corruption choice is offered exactly once per victim, ever — the
+    // FIRST time they're successfully stolen from, no matter who did it or
+    // what they end up choosing. A player who already answered (whether
+    // they picked Innocent or Corrupted) just has the card taken silently
+    // on every later theft; they're never asked again. This is why the
+    // check is hasBeenOfferedCorruptionChoice, not target.isCorrupted —
+    // the old check re-prompted an Innocent-who-declined every single time
+    // they got robbed again, which contradicts "already chosen once, never
+    // asked again" for the decline case.
+    if (!target.hasBeenOfferedCorruptionChoice) {
+      target.hasBeenOfferedCorruptionChoice = true;
       this.pendingCorruptionChoices.add(target.playerId);
       this.emitToPlayer(target.playerId, "corruption:prompt", {});
     }
@@ -979,11 +998,22 @@ export class Room {
     this.clearAllTimers();
     this.setPhase(PHASES.GAME_OVER);
 
+    // MVP rule, per the exact spec: Corrupted win -> whoever stole the most
+    // cards, ever (cardsStolen — a running total, not their current held
+    // count, since those can diverge if the MVP later got robbed back or
+    // died). Innocent win -> whoever, among players who stayed Innocent the
+    // whole game, is currently holding the most cards. Ties share MVP.
     let individualWinners = [];
     if (winner === "CORRUPTED") {
-      const livingCorrupted = this.livingPlayers().filter((p) => p.isCorrupted);
-      const maxCards = Math.max(0, ...livingCorrupted.map((p) => p.cards));
-      individualWinners = livingCorrupted
+      const corrupted = this.playerList().filter((p) => p.isCorrupted);
+      const maxStolen = Math.max(0, ...corrupted.map((p) => p.cardsStolen || 0));
+      individualWinners = corrupted
+        .filter((p) => (p.cardsStolen || 0) === maxStolen)
+        .map((p) => ({ playerId: p.playerId, displayName: p.displayName, cardsStolen: p.cardsStolen || 0 }));
+    } else if (winner === "INNOCENTS") {
+      const innocents = this.playerList().filter((p) => !p.isCorrupted);
+      const maxCards = Math.max(0, ...innocents.map((p) => p.cards));
+      individualWinners = innocents
         .filter((p) => p.cards === maxCards)
         .map((p) => ({ playerId: p.playerId, displayName: p.displayName, cards: p.cards }));
     }
@@ -997,6 +1027,7 @@ export class Room {
         identity: identityOf(p),
         alive: p.alive,
         cards: p.cards,
+        cardsStolen: p.cardsStolen || 0,
       })),
     });
   }

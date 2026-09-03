@@ -22,16 +22,16 @@ export default function GameOverScreen({ result, onExit }) {
       <div className="small-dim" style={{ maxWidth: 360 }}>
         {innocentsWin
           ? "The Original Corrupted has been eliminated."
-          : "The Corrupted outnumber the Innocents."}
+          : "The Corrupted have taken control of the ship."}
       </div>
 
       {result.individualWinners?.length > 0 && (
         <div className="menu-card">
-          <div className="field-label">INDIVIDUAL WINNER{result.individualWinners.length > 1 ? "S" : ""}</div>
+          <div className="field-label">MVP{result.individualWinners.length > 1 ? "S" : ""}</div>
           <div className="player-chip-list">
             {result.individualWinners.map((w) => (
               <div key={w.playerId} className="player-chip">
-                {w.displayName} · {w.cards} cards
+                {w.displayName} · {innocentsWin ? `${w.cards} cards` : `${w.cardsStolen} stolen`}
               </div>
             ))}
           </div>

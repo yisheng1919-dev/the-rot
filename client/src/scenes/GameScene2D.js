@@ -72,6 +72,7 @@ export class GameScene2D {
     this.ctx = this.canvas.getContext("2d");
 
     this.selfId = null;
+    this.stealTargetId = null; // playerId currently auto-locked as a steal target, or null
     this.players = [];
     this.viewerIsGhost = false;
     this.blackout = false;
@@ -158,6 +159,12 @@ export class GameScene2D {
 
   setSelfId(id) {
     this.selfId = id;
+  }
+  // The player currently auto-locked as a steal target (highlighted with a
+  // red ring) — null when no one's in range or the local player isn't
+  // Corrupted right now. See GameScreen's lockedTargetId effect.
+  setStealTarget(playerId) {
+    this.stealTargetId = playerId;
   }
   setBlackout(on) {
     this.blackout = on;
@@ -558,6 +565,19 @@ export class GameScene2D {
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.ellipse(sx, sy + 12 * k, 13 * k, 5 * k, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Red lock-on ring — this player is the currently auto-targeted steal
+    // victim for a Corrupted local player (see GameScreen's lockedTargetId).
+    // Drawn under the character like a ground target marker, pulsing so
+    // it's readable at a glance even in a crowd.
+    if (this.stealTargetId && p.playerId === this.stealTargetId) {
+      const pulse = 0.75 + 0.25 * Math.sin((this._lastTickTime || 0) / 180);
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255, 60, 60, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.ellipse(sx, sy + 12 * k, 19 * k, 8 * k, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     if (img.complete && img.naturalWidth > 0) {
       const drawW = drawH * (img.naturalWidth / img.naturalHeight);

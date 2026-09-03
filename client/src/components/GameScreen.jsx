@@ -7,7 +7,6 @@ import PowerOutageOverlay from "./PowerOutageOverlay.jsx";
 import ActionButtons from "./ActionButtons.jsx";
 import CorruptionPrompt from "./CorruptionPrompt.jsx";
 import CorruptionRevealed from "./CorruptionRevealed.jsx";
-import StealPicker from "./StealPicker.jsx";
 import VotingPanel from "./VotingPanel.jsx";
 import TieClarifyPanel from "./TieClarifyPanel.jsx";
 import { EliminationRevealModal, PlayerDiedToast } from "./EliminationReveal.jsx";
@@ -38,12 +37,9 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   // populated for movement/steal-range) has everything the map needs,
   // including .color, so MapRoomPanel now reads straight from that.
   const [showMapPanel, setShowMapPanel] = useState(false);
-  const [showStealPicker, setShowStealPicker] = useState(false);
   const [showCorruptionRevealed, setShowCorruptionRevealed] = useState(false);
   const [dismissedDeath, setDismissedDeath] = useState(null);
   const positionsRef = useRef([]);
-  const ocDwellRef = useRef({ ms: 0, targetId: null });
-  const ocStealBusyRef = useRef(false);
 
   const isGhost = !game.alive;
   const isFrozen = FROZEN_PHASES.has(game.phase);
@@ -62,24 +58,30 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
     positionsRef.current = positions;
   }, [positions]);
 
-  // The Original Corrupted no longer presses a button to steal — per design,
-  // just being near someone for a moment is enough (walking up and taking
-  // it, not "asking"). Polls proximity independently of React's render
-  // cycle so it keeps working even while the player is mid-drag on the
-  // joystick and nothing else is re-rendering.
+  // Both OC and regular Corrupted now share one steal flow: auto-lock onto
+  // the single nearest valid target in range (no picking from a list) and
+  // highlight them on-canvas with a red outline, but stealing itself is
+  // manual — a STEAL CARD button has to be pressed to confirm. This used to
+  // be two different flows (OC auto-fired with no button at all after a
+  // 100ms dwell; regular Corrupted opened a picker listing everyone in
+  // range) — now both use the same auto-target/manual-confirm shape.
+  const [lockedTargetId, setLockedTargetId] = useState(null);
+  const [stealBusy, setStealBusy] = useState(false);
+
   useEffect(() => {
-    if (!game.isOC || isGhost) return undefined;
+    if (!game.isCorrupted || isGhost) {
+      setLockedTargetId(null);
+      return undefined;
+    }
     const eligiblePhase =
       game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn);
     if (!eligiblePhase || game.hasStolenThisRound) {
-      ocDwellRef.current = { ms: 0, targetId: null };
+      setLockedTargetId(null);
       return undefined;
     }
 
-    const DWELL_MS = 100;
-    const TICK_MS = 50;
+    const TICK_MS = 100;
     const interval = setInterval(() => {
-      if (ocStealBusyRef.current) return;
       let nearest = null;
       let nearestDist = Infinity;
       for (const p of positionsRef.current) {
@@ -90,34 +92,27 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
           nearestDist = dist;
         }
       }
-
-      const dwell = ocDwellRef.current;
-      if (!nearest) {
-        dwell.ms = 0;
-        dwell.targetId = null;
-        return;
-      }
-      if (dwell.targetId !== nearest) {
-        dwell.targetId = nearest;
-        dwell.ms = 0;
-      }
-      dwell.ms += TICK_MS;
-      if (dwell.ms < DWELL_MS) return;
-
-      ocStealBusyRef.current = true;
-      socket.emit("player:stealCard", { targetId: nearest }, (res) => {
-        ocStealBusyRef.current = false;
-        // Reset the dwell clock regardless of outcome — a failure (e.g. the
-        // target just died, or someone else's card already flipped this
-        // round) shouldn't spam retries every single tick; require standing
-        // near someone for another full DWELL_MS before trying again.
-        ocDwellRef.current = { ms: 0, targetId: null };
-        if (res?.ok) game.onStolen?.();
-      });
+      setLockedTargetId((prev) => (prev === nearest ? prev : nearest));
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [game.isOC, game.phase, game.powerOn, game.hasStolenThisRound, isGhost, selfId]);
+  }, [game.isCorrupted, game.phase, game.powerOn, game.hasStolenThisRound, isGhost, selfId]);
+
+  // Feed the locked target to the canvas so it can draw the red highlight
+  // ring around them.
+  useEffect(() => {
+    sceneRef.current?.setStealTarget(lockedTargetId);
+  }, [lockedTargetId]);
+
+  const confirmSteal = () => {
+    if (!lockedTargetId || stealBusy) return;
+    setStealBusy(true);
+    socket.emit("player:stealCard", { targetId: lockedTargetId }, (res) => {
+      setStealBusy(false);
+      if (!res?.ok) onErrorToast(res?.reason || "Steal failed.");
+      else game.onStolen?.();
+    });
+  };
 
   // ---- Set up the 2D scene once ----
   useEffect(() => {
@@ -243,20 +238,6 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
       return r?.id === "POWER_ROOM";
     })();
 
-  const nearbyStealTargets = positions
-    .filter((p) => {
-      if (p.playerId === selfId) return false;
-      const dx = p.x - positionRef.current.x;
-      const dz = p.z - positionRef.current.z;
-      return Math.hypot(dx, dz) <= STEAL_RANGE;
-    })
-    .map((p) => {
-      const dx = p.x - positionRef.current.x;
-      const dz = p.z - positionRef.current.z;
-      return { playerId: p.playerId, displayName: playersById[p.playerId] || "Player", dist: Math.hypot(dx, dz) };
-    })
-    .sort((a, b) => a.dist - b.dist);
-
   const showRestorePower =
     !isGhost && game.phase === "POWER_OUTAGE" && !game.powerOn && inPowerRoomZone;
   // Meeting can only be called from Cafeteria while roaming free, before
@@ -265,9 +246,11 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
   // already there; it just reads as a confusing, redundant control.
   const showMeeting = !isGhost && game.phase === "FREE_ROAM" && inCafeteria;
   const showSeeMapButton = !isGhost && inMapRoom && !showMapPanel;
-  const showStealAction =
-    !isGhost && game.isCorrupted && !game.isOC && !game.hasStolenThisRound && nearbyStealTargets.length > 0 &&
-    (game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn));
+  // The lockedTargetId effect above already gates on isCorrupted/phase/
+  // hasStolenThisRound — a non-null lock means a steal is actually valid
+  // right now, for OC and regular Corrupted alike.
+  const showStealAction = !isGhost && !!lockedTargetId;
+  const lockedTargetName = lockedTargetId ? playersById[lockedTargetId] || "Player" : null;
 
   return (
     <div className="app-shell">
@@ -301,10 +284,9 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
         </button>
       </div>
 
-      {game.isOC && !isGhost && !game.hasStolenThisRound &&
-        (game.phase === "ROUND_START" || game.phase === "FREE_ROAM" || (game.phase === "POWER_OUTAGE" && game.powerOn)) && (
-          <div className="oc-steal-hint">🕳 Get close to a player to steal their card</div>
-        )}
+      {showStealAction && (
+        <div className="steal-lock-hint">🎯 Locked onto {lockedTargetName} — press STEAL CARD</div>
+      )}
 
       {game.phase === "DISCUSSION" && !isGhost && (
         <DiscussionBoard positions={positions} playersById={playersById} selfId={selfId} />
@@ -314,7 +296,8 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
         showRestorePower={showRestorePower}
         showMeeting={showMeeting}
         showMap={showSeeMapButton}
-        stealTargets={showStealAction ? nearbyStealTargets : []}
+        showSteal={showStealAction}
+        stealBusy={stealBusy}
         onRestorePower={() => {
           socket.emit("player:restorePower", {}, (res) => {
             if (!res?.ok) onErrorToast(res?.reason || "Could not restore power.");
@@ -328,22 +311,8 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
           });
         }}
         onOpenMap={() => setShowMapPanel(true)}
-        onOpenStealPicker={() => setShowStealPicker(true)}
+        onSteal={confirmSteal}
       />
-
-      {showStealPicker && (
-        <StealPicker
-          targets={nearbyStealTargets}
-          onClose={() => setShowStealPicker(false)}
-          onPick={(targetId) => {
-            socket.emit("player:stealCard", { targetId }, (res) => {
-              if (!res?.ok) onErrorToast(res?.reason || "Steal failed.");
-              else game.onStolen?.();
-              setShowStealPicker(false);
-            });
-          }}
-        />
-      )}
 
       {showMapPanel && (
         <MapRoomPanel players={positions} selfId={selfId} onClose={() => setShowMapPanel(false)} />

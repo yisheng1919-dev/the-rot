@@ -4,11 +4,12 @@ export default function ActionButtons({
   showRestorePower,
   showMeeting,
   showMap,
-  stealTargets,
+  showSteal,
+  stealBusy,
   onRestorePower,
   onCallMeeting,
   onOpenMap,
-  onOpenStealPicker,
+  onSteal,
   powerRestoreCount = 0,
   powerRestoreNeeded = 0,
 }) {
@@ -21,8 +22,8 @@ export default function ActionButtons({
             : "⚡ RESTORE POWER"}
         </button>
       )}
-      {stealTargets && stealTargets.length > 0 && (
-        <button className="action-btn steal" onClick={onOpenStealPicker}>
+      {showSteal && (
+        <button className="action-btn steal" onClick={onSteal} disabled={stealBusy}>
           🕳 STEAL CARD
         </button>
       )}
