@@ -445,10 +445,44 @@ export class GameScene2D {
   }
 
   _drawZone(zone, isRoom) {
-    const { sx, sy } = this.worldToScreen(zone.x, zone.z);
-    const w = zone.w * this.scale;
-    const h = zone.d * this.scale;
+    let { sx, sy } = this.worldToScreen(zone.x, zone.z);
+    let w = zone.w * this.scale;
+    let h = zone.d * this.scale;
     const ctx = this.ctx;
+
+    if (!isRoom) {
+      // Several corridors were deliberately widened earlier (past even a
+      // room's own 12-unit width) specifically to fix a "stuck at the
+      // doorway" bug from mobile touch-joystick drift — that fix has to
+      // stay, the actual walkable collision (rooms.js) is untouched here.
+      // But the side effect was corridors visually reading as BIGGER than
+      // the rooms they connect, which no longer looks like a corridor at
+      // all. This shrinks only the VISUAL footprint, centered, leaving an
+      // invisible-but-still-walkable buffer around the drawn edges — the
+      // generous collision that fixed the doorway bug is still fully
+      // there, it just isn't drawn that wide anymore.
+      //
+      // Only the axis that ISN'T clearly the corridor's connecting length
+      // gets capped — a dimension more than 2x the other is assumed to be
+      // the span between the two rooms it joins (shrinking THAT would pull
+      // the corridor away from one or both doorways, leaving a visible
+      // gap), so it's left alone; the other (perpendicular, "width") axis
+      // is capped down toward a normal room-width-ish size.
+      const worldW = zone.w, worldD = zone.d;
+      const capAxis = (big, small) => (big > small * 2 ? big : Math.min(big, 18));
+      const visualWorldW = capAxis(worldW, worldD);
+      const visualWorldD = capAxis(worldD, worldW);
+      if (visualWorldW !== worldW || visualWorldD !== worldD) {
+        const centerX = zone.x + worldW / 2;
+        const centerZ = zone.z + worldD / 2;
+        const p = this.worldToScreen(centerX - visualWorldW / 2, centerZ - visualWorldD / 2);
+        sx = p.sx;
+        sy = p.sy;
+        w = visualWorldW * this.scale;
+        h = visualWorldD * this.scale;
+      }
+    }
+
     // Rooms are drawn as proper octagons (_drawOctagon), matching the
     // reference blueprint's faceted room style — but this used to be a
     // fixed 22px chamfer regardless of room size. After this session's
@@ -522,6 +556,19 @@ export class GameScene2D {
       ctx.shadowBlur = 3;
       ctx.fillText(zone.label.toUpperCase(), sx + w / 2, sy + 18);
       ctx.shadowBlur = 0;
+    } else if (!isRoom) {
+      // Corridors used to render with zero label at all — a first-time
+      // player walking through one had no visual cue it was a distinct
+      // "corridor" space rather than just an odd-shaped extension of
+      // whichever room they'd just left, which is exactly the reported
+      // confusion. A small, muted label (much quieter than a room name —
+      // corridors are pass-through spaces, not destinations) fixes that
+      // without changing the actual geometry or collision at all.
+      ctx.fillStyle = "rgba(160,180,210,0.4)";
+      ctx.font = "600 11px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("CORRIDOR", sx + w / 2, sy + h / 2);
     }
   }
 

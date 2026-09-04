@@ -18,7 +18,7 @@ const MOVE_SPEED = 6.2; // world units per second
 const STEAL_RANGE = 6.75; // must match server/src/constants.js STEAL_RANGE (4.5 * 1.5 world-scale)
 const FROZEN_PHASES = new Set(["DISCUSSION", "VOTING", "TIE_CLARIFY", "TIE_VOTE", "ELIMINATION_REVEAL"]);
 
-export default function GameScreen({ selfId, displayName, game, playersById = {}, onErrorToast }) {
+export default function GameScreen({ selfId, displayName, game, playersById = {}, onErrorToast, chatLog, onSendChat }) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const positionRef = useRef({ x: 0, z: 0 });
@@ -288,8 +288,15 @@ export default function GameScreen({ selfId, displayName, game, playersById = {}
         <div className="steal-lock-hint">🎯 Locked onto {lockedTargetName} — press STEAL CARD</div>
       )}
 
-      {game.phase === "DISCUSSION" && !isGhost && (
-        <DiscussionBoard positions={positions} playersById={playersById} selfId={selfId} />
+      {(game.phase === "DISCUSSION" || game.phase === "TIE_CLARIFY") && !isGhost && (
+        <DiscussionBoard
+          positions={positions}
+          playersById={playersById}
+          selfId={selfId}
+          chatLog={chatLog}
+          onSendChat={onSendChat}
+          canChat={!isGhost}
+        />
       )}
 
       <ActionButtons

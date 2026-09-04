@@ -1,9 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { spriteUrlFor } from "../colors.js";
 
-export default function DiscussionBoard({ positions, playersById, selfId }) {
+export default function DiscussionBoard({ positions, playersById, selfId, chatLog = [], onSendChat, canChat }) {
   const count = positions.length;
   const radius = count <= 5 ? 82 : count <= 8 ? 98 : 114;
+  const [draft, setDraft] = useState("");
+
+  const send = () => {
+    const text = draft.trim();
+    if (!text || !onSendChat) return;
+    onSendChat(text);
+    setDraft("");
+  };
 
   return (
     <div className="meeting-table-wrap">
@@ -33,6 +41,34 @@ export default function DiscussionBoard({ positions, playersById, selfId }) {
           {count === 0 && <div className="small-dim">No one left to discuss with…</div>}
         </div>
       </div>
+
+      {onSendChat && (
+        <div className="chat-panel">
+          <div className="chat-log">
+            {chatLog.length === 0 && <div className="chat-empty">No messages yet — say something.</div>}
+            {chatLog.map((m, i) => (
+              <div key={i} className={`chat-line ${m.playerId === selfId ? "self" : ""}`}>
+                <span className="chat-author">{m.displayName}:</span> {m.text}
+              </div>
+            ))}
+          </div>
+          {canChat && (
+            <div className="chat-input-row">
+              <input
+                className="chat-input"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && send()}
+                placeholder="Type a message…"
+                maxLength={240}
+              />
+              <button className="chat-send-btn" onClick={send}>
+                SEND
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

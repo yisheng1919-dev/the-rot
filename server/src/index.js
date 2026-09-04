@@ -193,6 +193,12 @@ io.on("connection", (socket) => {
     ack?.(room.handleVote(socket.data.playerId, targetId));
   });
 
+  socket.on("player:chatMessage", ({ text }, ack) => {
+    const room = roomManager.getRoom(socket.data.roomCode);
+    if (!room || !socket.data.playerId) return ack?.({ ok: false, reason: "No room." });
+    ack?.(room.handleChatMessage(socket.data.playerId, text));
+  });
+
   // ---- Disconnect -------------------------------------------------------
   socket.on("disconnect", () => {
     const room = roomManager.getRoom(socket.data.roomCode);

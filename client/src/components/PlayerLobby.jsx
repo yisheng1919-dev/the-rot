@@ -22,13 +22,13 @@ export default function PlayerLobby({ code, players, displayName }) {
       <div className="menu-card" style={{ textAlign: "left" }}>
         <div className="field-label">HOW TO PLAY</div>
         <ol className="tutorial-steps">
-          <li>Move with the joystick, bottom-left.</li>
+          <li>Move with the joystick, bottom-left. The narrow connecting passages between rooms are corridors — walk through them to get from one room to another.</li>
+          <li>There are no tasks to complete. Just explore, keep an eye on who's acting suspicious, and stay near others for safety.</li>
           <li>When the power goes out, follow the red arrow to the Power Room.</li>
-          <li>Tap RESTORE POWER once you're inside.</li>
-          <li>Watch who's acting suspicious.</li>
-          <li>Discuss with everyone after power is back.</li>
-          <li>Vote for who you suspect.</li>
-          <li>Protect your 3 cards — if they hit 0, you're out.</li>
+          <li>Restoring power takes a group effort — everyone needed has to be inside the Power Room and press RESTORE POWER together.</li>
+          <li>Once power's back, talk it over with everyone — in person, out loud — about who seems suspicious.</li>
+          <li>Vote for who you suspect at the meeting.</li>
+          <li>Protect your cards — if they hit 0, you're out.</li>
         </ol>
       </div>
     </div>

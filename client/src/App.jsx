@@ -55,6 +55,7 @@ export default function App() {
   const [roomCode, setRoomCode] = useState("");
   const [config, setConfig] = useState(null);
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
+  const [chatLog, setChatLog] = useState([]);
   const [self, setSelf] = useState(null); // {playerId, displayName, reconnectToken}
   const [game, setGame] = useState(initialGame);
   const [gameOverResult, setGameOverResult] = useState(null);
@@ -216,7 +217,13 @@ export default function App() {
           ? { votesCast: 0, votersNeeded: g.livingCount, hasVoted: false }
           : {}),
       }));
+      // Fresh chat log for each new discussion moment — old messages from a
+      // previous round's discussion (or a previous tie-clarify window)
+      // shouldn't linger and confuse who's talking about what.
+      if (phase === "DISCUSSION" || phase === "TIE_CLARIFY") setChatLog([]);
     };
+    const onChatMessage = (msg) => setChatLog((log) => [...log, msg]);
+    const onChatHistory = ({ messages }) => setChatLog(messages || []);
     const onPowerState = ({ on }) => setGame((g) => ({ ...g, powerOn: on }));
     const onPowerRestoreProgress = ({ count, needed }) =>
       setGame((g) => ({ ...g, powerRestoreCount: count, powerRestoreNeeded: needed }));
@@ -280,6 +287,8 @@ export default function App() {
     socket.on("room:update", onRoomUpdate);
     socket.on("players:summary", onPlayersSummary);
     socket.on("phase:change", onPhaseChange);
+    socket.on("chat:message", onChatMessage);
+    socket.on("chat:history", onChatHistory);
     socket.on("power:state", onPowerState);
     socket.on("power:restoreProgress", onPowerRestoreProgress);
     socket.on("role:assigned", onRoleAssigned);
@@ -305,6 +314,8 @@ export default function App() {
       socket.off("room:update", onRoomUpdate);
       socket.off("players:summary", onPlayersSummary);
       socket.off("phase:change", onPhaseChange);
+      socket.off("chat:message", onChatMessage);
+      socket.off("chat:history", onChatHistory);
       socket.off("power:state", onPowerState);
       socket.off("power:restoreProgress", onPowerRestoreProgress);
       socket.off("role:assigned", onRoleAssigned);
@@ -443,6 +454,12 @@ export default function App() {
         displayName={self?.displayName}
         playersById={playersById}
         onErrorToast={showError}
+        chatLog={chatLog}
+        onSendChat={(text) => {
+          socket.emit("player:chatMessage", { text }, (res) => {
+            if (!res?.ok) showError(res?.reason || "Could not send message.");
+          });
+        }}
         game={{
           ...game,
           onCorruptionResolved: () => setGame((g) => ({ ...g, corruptionPromptOpen: false })),

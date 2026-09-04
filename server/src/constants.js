@@ -38,7 +38,6 @@ export const DEFAULT_CONFIG = {
   powerRestoreRequiredPlayers: 3,
   discussionSeconds: 180,
   manualMeetingProgressSeconds: 60,
-  stealCooldownSeconds: 7,
   tieClarifySeconds: 60,
   reconnectGraceSeconds: 90,
   eliminationRevealSeconds: 6,

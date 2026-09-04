@@ -45,6 +45,7 @@ export class Room {
     this.tieCandidates = [];
 
     this.pendingCorruptionChoices = new Set(); // playerIds awaiting a private choice
+    this.chatLog = []; // current discussion's messages — replayed to anyone who reconnects mid-discussion
 
     this.timers = {};
     this.phaseDeadline = null;
@@ -109,7 +110,6 @@ export class Room {
       z: 0,
 
       hasStolenThisRound: false,
-      lastStealAt: null, // timestamp of last successful steal, for stealCooldownSeconds
       stealHistory: new Set(), // targetIds this player has personally stolen from, ever — same pair can never repeat
       cardsStolen: 0, // total successful steals this player has made, ever — used for the Corrupted-win MVP
       hasBeenOfferedCorruptionChoice: false, // the choice is offered once per victim, ever, regardless of what they pick
@@ -171,6 +171,16 @@ export class Room {
       );
       this.emitToPlayer(player.playerId, "vote:targets", { targets, restricted: !!restrictTo });
       this.emitToPlayer(player.playerId, "vote:self", { hasVoted: this.votes.has(player.playerId) });
+    }
+
+    // Same idea for chat: a player reconnecting mid-discussion (or mid
+    // tie-clarify) used to come back to an empty chat box even though the
+    // conversation was still going — chat is only ever pushed live as new
+    // messages arrive, never replayed. Send the whole current log as one
+    // batch so they're caught up instead of missing everything that
+    // happened while they were disconnected.
+    if (this.phase === PHASES.DISCUSSION || this.phase === PHASES.TIE_CLARIFY) {
+      this.emitToPlayer(player.playerId, "chat:history", { messages: this.chatLog });
     }
 
     return player;
@@ -541,6 +551,7 @@ export class Room {
 
   _startDiscussion() {
     this.clearAllTimers();
+    this.chatLog = []; // fresh discussion, fresh chat — nothing from a previous round lingers
     const deadline = Date.now() + this.config.discussionSeconds * 1000;
     this.setPhase(PHASES.DISCUSSION, deadline);
     this.timers.discussionEnd = setTimeout(() => {
@@ -606,6 +617,30 @@ export class Room {
   // connection flaps right as the phase begins).
   _connectedLivingIds() {
     return this.livingPlayers().filter((p) => p.connected).map((p) => p.playerId);
+  }
+
+  // Chat is scoped to the actual "talk it over" phases — DISCUSSION and the
+  // TIE_CLARIFY re-discussion window before a tie-break re-vote. Not open
+  // during VOTING itself (that's a secret ballot) or general FREE_ROAM
+  // (players are meant to talk out loud in person while walking around;
+  // this exists for the structured meeting moment specifically, per
+  // feedback that new players had nothing to discuss with).
+  handleChatMessage(playerId, text) {
+    const validPhase = this.phase === PHASES.DISCUSSION || this.phase === PHASES.TIE_CLARIFY;
+    if (!validPhase) return { ok: false, reason: "Chat is only open during discussion." };
+    const player = this.players.get(playerId);
+    if (!player) return { ok: false, reason: "Unknown player." };
+    if (!player.alive) return { ok: false, reason: "Ghosts cannot speak — you can only watch." };
+
+    const trimmed = String(text || "").trim().slice(0, 240);
+    if (!trimmed) return { ok: false, reason: "Message is empty." };
+
+    const msg = { playerId, displayName: player.displayName, text: trimmed, at: Date.now() };
+    this.chatLog.push(msg);
+    if (this.chatLog.length > 100) this.chatLog.shift(); // cap — this is a live discussion aid, not a permanent transcript
+
+    this.io.to(this.roomKey).emit("chat:message", msg);
+    return { ok: true };
   }
 
   handleVote(voterId, targetId) {
@@ -686,6 +721,7 @@ export class Room {
 
   _startTieClarify(tieCandidates) {
     this.clearAllTimers();
+    this.chatLog = []; // separate fresh chat for the tie re-discussion window
     this.tieCandidates = tieCandidates;
     const deadline = Date.now() + this.config.tieClarifySeconds * 1000;
     this.setPhase(PHASES.TIE_CLARIFY, deadline);
@@ -791,19 +827,18 @@ export class Room {
     if (!attacker.isCorrupted) return { ok: false, reason: "Only Corrupted players can steal." };
     if (attacker.hasStolenThisRound) return { ok: false, reason: "You already stole this round." };
 
-    // stealCooldownSeconds existed in config from the start but was never
-    // actually enforced anywhere — the only real limit was the once-per-
-    // round flag above, which is a much longer window in practice, so this
-    // rarely changes anything today. Wiring it up anyway rather than
-    // deleting it: it's real protection against any future change that
-    // relaxes the once-per-round rule (e.g. multiple steals per round) or
-    // any client bug that fires a rapid burst of steal requests, without
-    // changing today's actual gameplay pacing.
-    const cooldownMs = this.config.stealCooldownSeconds * 1000;
-    if (attacker.lastStealAt && Date.now() - attacker.lastStealAt < cooldownMs) {
-      const waitSec = Math.ceil((cooldownMs - (Date.now() - attacker.lastStealAt)) / 1000);
-      return { ok: false, reason: `Wait ${waitSec}s before stealing again.` };
-    }
+    // A wall-clock stealCooldownSeconds used to be enforced here on top of
+    // the once-per-round flag above — that was the actual bug reported as
+    // "can't steal in round 3": hasStolenThisRound correctly resets every
+    // round, but this cooldown was measured in real elapsed seconds
+    // (Date.now()), which does NOT reset with the round counter. Confirmed
+    // by directly simulating 3 full rounds against this exact code: round 2
+    // and round 3 both got rejected with "Wait Xs before stealing again"
+    // even though hasStolenThisRound correctly said they were eligible,
+    // simply because fewer than 7 real seconds had elapsed since their last
+    // successful steal. Removed — hasStolenThisRound (per round) and
+    // stealHistory (per attacker-victim pair, see below) are the only
+    // eligibility gates now.
 
     const target = this.players.get(targetId);
     if (!target || !target.alive) return { ok: false, reason: "Invalid target." };
@@ -825,7 +860,6 @@ export class Room {
 
     // All checks passed — commit the steal.
     attacker.hasStolenThisRound = true;
-    attacker.lastStealAt = Date.now();
     attacker.stealHistory.add(targetId);
     attacker.cardsStolen = (attacker.cardsStolen || 0) + 1; // for the end-game MVP
     target.cards -= 1;

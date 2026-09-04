@@ -47,6 +47,7 @@ export default function GameOverScreen({ result, onExit }) {
                 {p.displayName} {!p.alive && "· eliminated"}
               </span>
               <span className={`identity-tag ${p.identity}`}>{p.identity.replace("_", " ")}</span>
+              <span className="summary-cards">{p.cards} cards</span>
             </div>
           ))}
         </div>
